@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+*.log
+tests/fixtures/*.mp4
+tests/fixtures/*.flv
+tests/fixtures/*.ts
+tests/fixtures/*.wav
+tests/fixtures/*.onnx

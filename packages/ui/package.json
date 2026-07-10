@@ -1,0 +1,22 @@
+{
+  "name": "@media-workflow/ui",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@media-workflow/core": "workspace:*",
+    "@media-workflow/nodes": "workspace:*",
+    "@media-workflow/codec": "workspace:*",
+    "litegraph.js": "^0.7.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "typescript": "^5.4.0"
+  }
+}

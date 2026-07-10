@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#090b10" />
+  <title>Media Flow</title>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">M</div>
+        <div class="brand-copy">
+          <strong>Media Flow</strong>
+          <span>Analysis workspace</span>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <button id="theme-toggle-button" class="button button--icon" type="button" aria-label="切换到浅色模式" title="切换明暗主题">
+          <svg class="theme-icon theme-icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <svg class="theme-icon theme-icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M20.5 14.2A8.2 8.2 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"/>
+          </svg>
+        </button>
+        <button id="save-workflow-button" class="button" type="button">
+          <svg class="button__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M5 3h12l2 2v16H5V3Z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>
+          </svg>
+          保存
+          <span class="shortcut">⌘S</span>
+        </button>
+        <button id="run-workflow-button" class="button button--primary" type="button">
+          <svg class="button__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="m8 5 11 7-11 7V5Z"/>
+          </svg>
+          运行
+          <span class="shortcut">⌘↵</span>
+        </button>
+      </div>
+    </header>
+
+    <aside id="palette" class="sidebar">
+      <div class="panel-header">
+        <h2 class="panel-title">节点库</h2>
+        <span id="node-count" class="panel-count">0</span>
+      </div>
+      <label class="palette-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
+        </svg>
+        <input id="node-search" type="search" placeholder="搜索节点…" autocomplete="off" />
+      </label>
+      <div id="palette-list"></div>
+    </aside>
+
+    <main id="canvas-wrap" aria-label="工作流画布">
+      <div class="canvas-hint">在 File Loader 节点内选择文件 · 滚轮缩放 · 空格拖动画布</div>
+    </main>
+
+    <aside id="properties" class="sidebar">
+      <div class="panel-header">
+        <h3 class="panel-title">检查器</h3>
+      </div>
+      <div class="inspector-body">
+        <section class="inspector-section">
+          <h4>快捷操作</h4>
+          <div class="shortcut-list">
+            <div class="shortcut-row"><span>运行工作流</span><kbd>⌘ ↵</kbd></div>
+            <div class="shortcut-row"><span>保存工作流</span><kbd>⌘ S</kbd></div>
+            <div class="shortcut-row"><span>删除节点</span><kbd>⌫</kbd></div>
+          </div>
+        </section>
+
+        <section class="inspector-section">
+          <h4>使用提示</h4>
+          <p class="viewport-note">从左侧拖入节点并连接端口。点击 File Loader 节点内的按钮选择媒体文件。</p>
+        </section>
+      </div>
+    </aside>
+
+    <section id="status" data-state="idle" aria-live="polite">
+      <div class="results-header">
+        <div class="status-line">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="status-text">工作流已就绪</span>
+        </div>
+        <span class="results-label">运行结果</span>
+      </div>
+      <div id="viewport"></div>
+    </section>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "generator": {
+    "ffprobe": "ffprobe version 7.1.1-7.1 Copyright (c) 2007-2025 the FFmpeg developers",
+    "ffmpeg": "ffmpeg version 7.1.1-7.1 Copyright (c) 2000-2025 the FFmpeg developers"
+  },
+  "input": {
+    "file": "tests/music_48kbps.wav",
+    "size": 17432920,
+    "sha256": "5f648808e92599b14ac621634e928c3f977d09e0d6009de32b5e69aa1c909287"
+  },
+  "expected": {
+    "format": {
+      "name": "wav",
+      "longName": "WAV / WAVE (Waveform Audio)",
+      "startTimeSeconds": null,
+      "durationSeconds": 90.796229,
+      "size": 17432920,
+      "bitrate": 1536003,
+      "probeScore": 99,
+      "tags": {}
+    },
+    "streamCount": 1,
+    "programCount": 0,
+    "streams": [
+      {
+        "index": 0,
+        "id": null,
+        "kind": "audio",
+        "codec": "pcm_s16le",
+        "profile": null,
+        "timeBase": "1/48000",
+        "startTimeSeconds": null,
+        "durationSeconds": 90.796229,
+        "bitrate": 1536000,
+        "frameCount": 1065,
+        "packetCount": 1065,
+        "width": null,
+        "height": null,
+        "pixelFormat": null,
+        "frameRate": "0/0",
+        "sampleRate": 48000,
+        "channels": 2,
+        "channelLayout": null,
+        "bitsPerSample": 16,
+        "extradataSize": null,
+        "tags": {}
+      }
+    ]
+  },
+  "probe": {
+    "exitCode": 0,
+    "warnings": [],
+    "data": {
+      "programs": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "pcm_s16le",
+          "codec_long_name": "PCM signed 16-bit little-endian",
+          "codec_type": "audio",
+          "codec_tag_string": "[1][0][0][0]",
+          "codec_tag": "0x0001",
+          "sample_fmt": "s16",
+          "sample_rate": "48000",
+          "channels": 2,
+          "bits_per_sample": 16,
+          "initial_padding": 0,
+          "r_frame_rate": "0/0",
+          "avg_frame_rate": "0/0",
+          "time_base": "1/48000",
+          "duration_ts": 4358219,
+          "duration": "90.796229",
+          "bit_rate": "1536000",
+          "nb_read_frames": "1065",
+          "nb_read_packets": "1065",
+          "disposition": {
+            "default": 0,
+            "dub": 0,
+            "original": 0,
+            "comment": 0,
+            "lyrics": 0,
+            "karaoke": 0,
+            "forced": 0,
+            "hearing_impaired": 0,
+            "visual_impaired": 0,
+            "clean_effects": 0,
+            "attached_pic": 0,
+            "timed_thumbnails": 0,
+            "non_diegetic": 0,
+            "captions": 0,
+            "descriptions": 0,
+            "metadata": 0,
+            "dependent": 0,
+            "still_image": 0,
+            "multilayer": 0
+          }
+        }
+      ],
+      "chapters": [],
+      "format": {
+        "filename": "tests/music_48kbps.wav",
+        "nb_streams": 1,
+        "nb_programs": 0,
+        "nb_stream_groups": 0,
+        "format_name": "wav",
+        "format_long_name": "WAV / WAVE (Waveform Audio)",
+        "duration": "90.796229",
+        "size": "17432920",
+        "bit_rate": "1536003",
+        "probe_score": 99
+      }
+    }
+  },
+  "decodeValidation": {
+    "exitCode": 0,
+    "warnings": [
+      "[aist#0:0/pcm_s16le @ <ptr>] Guessed Channel Layout: stereo"
+    ]
+  }
+}

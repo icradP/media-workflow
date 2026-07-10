@@ -1,0 +1,24 @@
+{
+  "name": "media-workflow",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -C packages/ui dev",
+    "build": "pnpm -C packages/ui build",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "fixtures:ffprobe": "node scripts/generate_ffprobe_baselines.mjs",
+    "lint": "eslint packages/*/src --ext .ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "@types/node": "^20.12.0",
+    "eslint": "^8.57.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

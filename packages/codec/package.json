@@ -1,0 +1,27 @@
+{
+  "name": "@media-workflow/codec",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./binary": "./src/binary/index.ts",
+    "./h264": "./src/h264/index.ts",
+    "./h265": "./src/h265/index.ts",
+    "./aac": "./src/aac/index.ts",
+    "./g711": "./src/g711/index.ts",
+    "./flv": "./src/flv/index.ts",
+    "./ts": "./src/ts/index.ts",
+    "./ps": "./src/ps/index.ts",
+    "./mp4": "./src/mp4/index.ts",
+    "./audio": "./src/audio/index.ts"
+  },
+  "dependencies": {
+    "@media-workflow/core": "workspace:*"
+  },
+  "scripts": {
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  }
+}

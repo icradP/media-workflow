@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "generator": {
+    "ffprobe": "ffprobe version 7.1.1-7.1 Copyright (c) 2007-2025 the FFmpeg developers",
+    "ffmpeg": "ffmpeg version 7.1.1-7.1 Copyright (c) 2000-2025 the FFmpeg developers"
+  },
+  "input": {
+    "file": "tests/generated-av.mp4",
+    "size": 176762,
+    "sha256": "b286de9c40277eb5170e7ae6227d1f0140e3c8e81fa583454d7662a274cf3bb1"
+  },
+  "expected": {
+    "format": {
+      "name": "mov,mp4,m4a,3gp,3g2,mj2",
+      "longName": "QuickTime / MOV",
+      "startTimeSeconds": 0,
+      "durationSeconds": 2,
+      "size": 176762,
+      "bitrate": 707048,
+      "probeScore": 100,
+      "tags": {
+        "major_brand": "isom",
+        "minor_version": "512",
+        "compatible_brands": "isomiso2avc1mp41",
+        "encoder": "Lavf61.7.100"
+      }
+    },
+    "streamCount": 2,
+    "programCount": 0,
+    "streams": [
+      {
+        "index": 0,
+        "id": "0x1",
+        "kind": "video",
+        "codec": "h264",
+        "profile": "Constrained Baseline",
+        "timeBase": "1/12800",
+        "startTimeSeconds": 0,
+        "durationSeconds": 2,
+        "bitrate": 598984,
+        "frameCount": 50,
+        "packetCount": 50,
+        "width": 320,
+        "height": 180,
+        "pixelFormat": "yuv420p",
+        "frameRate": "25/1",
+        "sampleRate": null,
+        "channels": null,
+        "channelLayout": null,
+        "bitsPerSample": null,
+        "extradataSize": 38,
+        "tags": {
+          "language": "und",
+          "handler_name": "VideoHandler",
+          "vendor_id": "[0][0][0][0]",
+          "encoder": "Lavc61.19.101 libx264"
+        }
+      },
+      {
+        "index": 1,
+        "id": "0x2",
+        "kind": "audio",
+        "codec": "aac",
+        "profile": "LC",
+        "timeBase": "1/48000",
+        "startTimeSeconds": 0,
+        "durationSeconds": 2,
+        "bitrate": 96827,
+        "frameCount": 94,
+        "packetCount": 95,
+        "width": null,
+        "height": null,
+        "pixelFormat": null,
+        "frameRate": "0/0",
+        "sampleRate": 48000,
+        "channels": 1,
+        "channelLayout": "mono",
+        "bitsPerSample": 0,
+        "extradataSize": 5,
+        "tags": {
+          "language": "und",
+          "handler_name": "SoundHandler",
+          "vendor_id": "[0][0][0][0]"
+        }
+      }
+    ]
+  },
+  "probe": {
+    "exitCode": 0,
+    "warnings": [],
+    "data": {
+      "programs": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+          "profile": "Constrained Baseline",
+          "codec_type": "video",
+          "codec_tag_string": "avc1",
+          "codec_tag": "0x31637661",
+          "width": 320,
+          "height": 180,
+          "coded_width": 320,
+          "coded_height": 192,
+          "closed_captions": 0,
+          "film_grain": 0,
+          "has_b_frames": 0,
+          "sample_aspect_ratio": "1:1",
+          "display_aspect_ratio": "16:9",
+          "pix_fmt": "yuv420p",
+          "level": 12,
+          "chroma_location": "left",
+          "field_order": "progressive",
+          "refs": 1,
+          "is_avc": "true",
+          "nal_length_size": "4",
+          "id": "0x1",
+          "r_frame_rate": "25/1",
+          "avg_frame_rate": "25/1",
+          "time_base": "1/12800",
+          "start_pts": 0,
+          "start_time": "0.000000",
+          "duration_ts": 25600,
+          "duration": "2.000000",
+          "bit_rate": "598984",
+          "bits_per_raw_sample": "8",
+          "nb_frames": "50",
+          "nb_read_frames": "50",
+          "nb_read_packets": "50",
+          "extradata_size": 38,
+          "disposition": {
+            "default": 1,
+            "dub": 0,
+            "original": 0,
+            "comment": 0,
+            "lyrics": 0,
+            "karaoke": 0,
+            "forced": 0,
+            "hearing_impaired": 0,
+            "visual_impaired": 0,
+            "clean_effects": 0,
+            "attached_pic": 0,
+            "timed_thumbnails": 0,
+            "non_diegetic": 0,
+            "captions": 0,
+            "descriptions": 0,
+            "metadata": 0,
+            "dependent": 0,
+            "still_image": 0,
+            "multilayer": 0
+          },
+          "tags": {
+            "language": "und",
+            "handler_name": "VideoHandler",
+            "vendor_id": "[0][0][0][0]",
+            "encoder": "Lavc61.19.101 libx264"
+          }
+        },
+        {
+          "index": 1,
+          "codec_name": "aac",
+          "codec_long_name": "AAC (Advanced Audio Coding)",
+          "profile": "LC",
+          "codec_type": "audio",
+          "codec_tag_string": "mp4a",
+          "codec_tag": "0x6134706d",
+          "sample_fmt": "fltp",
+          "sample_rate": "48000",
+          "channels": 1,
+          "channel_layout": "mono",
+          "bits_per_sample": 0,
+          "initial_padding": 0,
+          "id": "0x2",
+          "r_frame_rate": "0/0",
+          "avg_frame_rate": "0/0",
+          "time_base": "1/48000",
+          "start_pts": 0,
+          "start_time": "0.000000",
+          "duration_ts": 96000,
+          "duration": "2.000000",
+          "bit_rate": "96827",
+          "nb_frames": "95",
+          "nb_read_frames": "94",
+          "nb_read_packets": "95",
+          "extradata_size": 5,
+          "disposition": {
+            "default": 1,
+            "dub": 0,
+            "original": 0,
+            "comment": 0,
+            "lyrics": 0,
+            "karaoke": 0,
+            "forced": 0,
+            "hearing_impaired": 0,
+            "visual_impaired": 0,
+            "clean_effects": 0,
+            "attached_pic": 0,
+            "timed_thumbnails": 0,
+            "non_diegetic": 0,
+            "captions": 0,
+            "descriptions": 0,
+            "metadata": 0,
+            "dependent": 0,
+            "still_image": 0,
+            "multilayer": 0
+          },
+          "tags": {
+            "language": "und",
+            "handler_name": "SoundHandler",
+            "vendor_id": "[0][0][0][0]"
+          }
+        }
+      ],
+      "chapters": [],
+      "format": {
+        "filename": "tests/generated-av.mp4",
+        "nb_streams": 2,
+        "nb_programs": 0,
+        "nb_stream_groups": 0,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "format_long_name": "QuickTime / MOV",
+        "start_time": "0.000000",
+        "duration": "2.000000",
+        "size": "176762",
+        "bit_rate": "707048",
+        "probe_score": 100,
+        "tags": {
+          "major_brand": "isom",
+          "minor_version": "512",
+          "compatible_brands": "isomiso2avc1mp41",
+          "encoder": "Lavf61.7.100"
+        }
+      }
+    }
+  },
+  "decodeValidation": {
+    "exitCode": 0,
+    "warnings": []
+  }
+}

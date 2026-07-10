@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "generator": {
+    "ffprobe": "ffprobe version 7.1.1-7.1 Copyright (c) 2007-2025 the FFmpeg developers",
+    "ffmpeg": "ffmpeg version 7.1.1-7.1 Copyright (c) 2000-2025 the FFmpeg developers"
+  },
+  "input": {
+    "file": "tests/record.mp4",
+    "size": 258,
+    "sha256": "45e948f4f5ca29fd45c402d5be13485a594e50a08c3b7135c0672e416604fc24"
+  },
+  "expected": {
+    "format": {
+      "name": "mov,mp4,m4a,3gp,3g2,mj2",
+      "longName": "QuickTime / MOV",
+      "startTimeSeconds": null,
+      "durationSeconds": null,
+      "size": 258,
+      "bitrate": null,
+      "probeScore": 100,
+      "tags": {
+        "major_brand": "isom",
+        "minor_version": "512",
+        "compatible_brands": "isomiso2mp41",
+        "encoder": "Lavf58.29.100"
+      }
+    },
+    "streamCount": 0,
+    "programCount": 0,
+    "streams": []
+  },
+  "probe": {
+    "exitCode": 0,
+    "warnings": [],
+    "data": {
+      "programs": [],
+      "streams": [],
+      "chapters": [],
+      "format": {
+        "filename": "tests/record.mp4",
+        "nb_streams": 0,
+        "nb_programs": 0,
+        "nb_stream_groups": 0,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "format_long_name": "QuickTime / MOV",
+        "size": "258",
+        "probe_score": 100,
+        "tags": {
+          "major_brand": "isom",
+          "minor_version": "512",
+          "compatible_brands": "isomiso2mp41",
+          "encoder": "Lavf58.29.100"
+        }
+      }
+    }
+  },
+  "decodeValidation": {
+    "exitCode": 234,
+    "warnings": [
+      "Stream map '' matches no streams.",
+      "To ignore this, add a trailing '?' to the map.",
+      "Failed to set value '0' for option 'map': Invalid argument",
+      "Error parsing options for output file -.",
+      "Error opening output files: Invalid argument"
+    ]
+  }
+}
