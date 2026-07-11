@@ -4,6 +4,7 @@ import ffprobeOverviewPreset from '../../presets/ffprobe-overview.workflow.json'
 import ffprobeVideoTrackPreset from '../../presets/ffprobe-video-track.workflow.json';
 import ffprobeAudioTrackPreset from '../../presets/ffprobe-audio-track.workflow.json';
 import decodeFirstKeyframePreset from '../../presets/decode-first-keyframe.workflow.json';
+import decodeFirstKeyframeDisplayPreset from '../../presets/decode-first-keyframe-display.workflow.json';
 import decodeAudioRangePreset from '../../presets/decode-audio-range.workflow.json';
 
 export interface WorkflowPresetCatalogEntry {
@@ -49,6 +50,12 @@ export const WORKFLOW_PRESET_CATALOG: WorkflowPresetCatalogEntry[] = [
     name: '视频关键帧解码规划',
     description: '规划首个关键帧 GOP 解码请求（不含解码器节点）。',
     preset: decodeFirstKeyframePreset as WorkflowPreset,
+  },
+  {
+    id: 'decode-first-keyframe-display',
+    name: '首帧解码预览',
+    description: '完整链路：分析 → 规划 → WebCodecs 解码 → YUV 预览。',
+    preset: decodeFirstKeyframeDisplayPreset as WorkflowPreset,
   },
   {
     id: 'decode-audio-range',

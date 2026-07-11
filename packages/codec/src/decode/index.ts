@@ -12,5 +12,9 @@ export {
   copyVideoFrameToI420,
   isWebCodecsAudioAvailable,
   isWebCodecsAvailable,
+  nv12ToI420Planes,
   packI420Planes,
+  parseI420Buffer,
+  resolveVideoFrameSampleId,
+  videoFrameBufferToI420Planes,
 } from './yuv.js';

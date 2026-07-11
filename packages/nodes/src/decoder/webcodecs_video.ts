@@ -12,6 +12,7 @@ import {
   adaptPacketForDecoder,
   copyVideoFrameToI420,
   isWebCodecsAvailable,
+  resolveVideoFrameSampleId,
 } from '@media-workflow/codec';
 
 export const webcodecsVideoDecoderNode: NodeDefinition<
@@ -46,12 +47,16 @@ export const webcodecsVideoDecoderNode: NodeDefinition<
     const ptsToSampleId = new Map(
       request.decodePackets.map(packet => [packet.ptsUs, packet.sourceSampleId]),
     );
-    const decodedFrames: DecodedVideoFrame[] = [];
+    const pendingFrames: Array<{ frame: VideoFrame; sourceSampleId: string }> = [];
     const decoder = new VideoDecoder({
       output: frame => {
-        const sourceSampleId = ptsToSampleId.get(Math.round(frame.timestamp)) ?? '';
-        if (targetIds.has(sourceSampleId)) {
-          decodedFrames.push(copyVideoFrameToI420(frame, sourceSampleId));
+        const sourceSampleId = resolveVideoFrameSampleId(
+          frame.timestamp,
+          ptsToSampleId,
+          targetIds,
+        );
+        if (sourceSampleId) {
+          pendingFrames.push({ frame: frame.clone(), sourceSampleId });
         }
         frame.close();
       },
@@ -88,6 +93,15 @@ export const webcodecsVideoDecoderNode: NodeDefinition<
 
     await decoder.flush();
     decoder.close();
+
+    const decodedFrames: DecodedVideoFrame[] = [];
+    for (const pending of pendingFrames) {
+      try {
+        decodedFrames.push(await copyVideoFrameToI420(pending.frame, pending.sourceSampleId));
+      } finally {
+        pending.frame.close();
+      }
+    }
 
     decodedFrames.sort((left, right) => left.ptsUs - right.ptsUs);
     ctx.log.info(`WebCodecsVideoDecoder: ${decodedFrames.length} target frame(s)`);

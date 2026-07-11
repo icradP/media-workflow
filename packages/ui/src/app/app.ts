@@ -86,6 +86,7 @@ interface LGraphNodeBase {
   outputs: LGraphSlot[];
   fileWidget?: LGraphWidget;
   displayPreview?: string[];
+  displayCanvas?: HTMLCanvasElement;
   properties: Record<string, unknown>;
   onExecute?: () => void;
   onDrawForeground?: (context: CanvasRenderingContext2D) => void;
@@ -139,7 +140,7 @@ function applyComputedNodeSize(
   const height = computed[1];
 
   if (nodeDef.category === 'display') {
-    node.size = [Math.max(width, 260), height + 92];
+    node.size = [Math.max(width, 280), height + 156];
     return;
   }
 
@@ -233,7 +234,7 @@ export function registerNodeTypes(options: RegisterNodeTypeOptions = {}) {
 
 function drawDisplayPreview(node: LGraphNodeBase, context: CanvasRenderingContext2D): void {
   const isLight = document.documentElement.dataset.theme === 'light';
-  const panelHeight = 76;
+  const panelHeight = node.displayCanvas ? 140 : 76;
   const panelY = node.size[1] - panelHeight - 8;
   const lines = node.displayPreview ?? ['等待分析结果…'];
 
@@ -247,11 +248,36 @@ function drawDisplayPreview(node: LGraphNodeBase, context: CanvasRenderingContex
   context.beginPath();
   context.rect(13, panelY + 5, node.size[0] - 26, panelHeight - 10);
   context.clip();
-  context.font = '10px ui-monospace, SFMono-Regular, monospace';
-  context.fillStyle = isLight ? '#555e72' : '#aab2c5';
-  lines.slice(0, 4).forEach((line, index) => {
-    context.fillText(line, 16, panelY + 18 + index * 15);
-  });
+
+  if (node.displayCanvas) {
+    const labelHeight = 18;
+    context.font = '10px ui-monospace, SFMono-Regular, monospace';
+    context.fillStyle = isLight ? '#555e72' : '#aab2c5';
+    context.fillText(lines[0] ?? 'Preview', 16, panelY + 16);
+
+    const imageX = 14;
+    const imageY = panelY + labelHeight + 4;
+    const imageWidth = node.size[0] - 28;
+    const imageHeight = panelHeight - labelHeight - 12;
+    const scale = Math.min(
+      imageWidth / node.displayCanvas.width,
+      imageHeight / node.displayCanvas.height,
+    );
+    const drawWidth = Math.max(1, node.displayCanvas.width * scale);
+    const drawHeight = Math.max(1, node.displayCanvas.height * scale);
+    const drawX = imageX + (imageWidth - drawWidth) / 2;
+    const drawY = imageY + (imageHeight - drawHeight) / 2;
+
+    context.fillStyle = isLight ? '#111827' : '#030712';
+    context.fillRect(imageX, imageY, imageWidth, imageHeight);
+    context.drawImage(node.displayCanvas, drawX, drawY, drawWidth, drawHeight);
+  } else {
+    context.font = '10px ui-monospace, SFMono-Regular, monospace';
+    context.fillStyle = isLight ? '#555e72' : '#aab2c5';
+    lines.slice(0, 4).forEach((line, index) => {
+      context.fillText(line, 16, panelY + 18 + index * 15);
+    });
+  }
   context.restore();
 }
 
@@ -313,10 +339,92 @@ function summarizeDisplayEvent(event: NodeExecutionEvent): string[] {
     return ['Hex preview', preview.slice(0, 46), preview.slice(46, 92)];
   }
 
+  if (event.node.id === 'yuv_preview') {
+    const frame = event.inputs.frame as {
+      displayWidth?: number;
+      displayHeight?: number;
+      format?: string;
+      sourceSampleId?: string;
+    } | undefined;
+    return [
+      `${frame?.displayWidth ?? '?'}×${frame?.displayHeight ?? '?'} · ${String(frame?.format ?? 'frame')}`,
+      String(frame?.sourceSampleId ?? 'decoded frame'),
+    ];
+  }
+
   return [
     event.status === 'cached' ? '缓存命中' : '执行完成',
     `${event.durationMs.toFixed(1)} ms`,
   ];
+}
+
+function createYuvDisplayCanvas(event: NodeExecutionEvent): HTMLCanvasElement | undefined {
+  const frame = event.inputs.frame as {
+    displayWidth?: number;
+    displayHeight?: number;
+    planes?: Uint8Array[];
+    strides?: number[];
+  } | undefined;
+
+  if (!frame?.planes || !frame.displayWidth || !frame.displayHeight) return undefined;
+
+  const previewCanvas = document.createElement('canvas');
+  previewCanvas.width = frame.displayWidth;
+  previewCanvas.height = frame.displayHeight;
+  renderI420FrameToCanvas(
+    previewCanvas,
+    frame.planes,
+    frame.displayWidth,
+    frame.displayHeight,
+    frame.strides ?? [
+      frame.displayWidth,
+      Math.ceil(frame.displayWidth / 2),
+      Math.ceil(frame.displayWidth / 2),
+    ],
+  );
+  return previewCanvas;
+}
+
+function renderI420FrameToCanvas(
+  target: HTMLCanvasElement,
+  planes: Uint8Array[],
+  width: number,
+  height: number,
+  strides: number[],
+): void {
+  const context = target.getContext('2d');
+  if (!context) return;
+  const [yPlane, uPlane, vPlane] = planes;
+  if (!yPlane || !uPlane || !vPlane) return;
+
+  const yStride = strides[0] ?? width;
+  const uvWidth = Math.ceil(width / 2);
+  const uStride = strides[1] ?? uvWidth;
+  const vStride = strides[2] ?? uvWidth;
+  const image = context.createImageData(width, height);
+  const rgba = image.data;
+
+  for (let row = 0; row < height; row++) {
+    for (let col = 0; col < width; col++) {
+      const y = yPlane[row * yStride + col]!;
+      const u = uPlane[Math.floor(row / 2) * uStride + Math.floor(col / 2)]!;
+      const v = vPlane[Math.floor(row / 2) * vStride + Math.floor(col / 2)]!;
+      const c = y - 16;
+      const d = u - 128;
+      const e = v - 128;
+      const index = (row * width + col) * 4;
+      rgba[index] = clampByte((298 * c + 409 * e + 128) >> 8);
+      rgba[index + 1] = clampByte((298 * c - 100 * d - 208 * e + 128) >> 8);
+      rgba[index + 2] = clampByte((298 * c + 516 * d + 128) >> 8);
+      rgba[index + 3] = 255;
+    }
+  }
+
+  context.putImageData(image, 0, 0);
+}
+
+function clampByte(value: number): number {
+  return Math.max(0, Math.min(255, value));
 }
 
 export interface MediaWorkflowApp {
@@ -702,6 +810,9 @@ export function createApp(): MediaWorkflowApp {
     );
     if (!node) return;
     node.displayPreview = summarizeDisplayEvent(event);
+    node.displayCanvas = event.node.id === 'yuv_preview'
+      ? createYuvDisplayCanvas(event)
+      : undefined;
     canvas.setDirty(true, true);
   }
 

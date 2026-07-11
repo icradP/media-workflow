@@ -521,6 +521,8 @@ kbd {
 
 #status {
   grid-area: results;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -529,6 +531,7 @@ kbd {
 }
 
 .results-header {
+  flex: 0 0 auto;
   display: flex;
   height: 42px;
   align-items: center;
@@ -583,21 +586,33 @@ kbd {
 #viewport {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  grid-auto-rows: max-content;
   align-content: start;
   gap: 12px;
-  height: calc(100% - 42px);
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 14px;
   overflow: auto;
+  overscroll-behavior: contain;
   color: var(--text);
   font-size: 11px;
 }
 
 .result-card {
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 10px;
+}
+
+.result-card--expanded {
+  grid-column: 1 / -1;
+}
+
+.result-card--collapsed .result-card__body {
+  display: none;
 }
 
 .result-card__header {
@@ -612,6 +627,7 @@ kbd {
 }
 
 .result-card__title {
+  min-width: 0;
   overflow: hidden;
   font-size: 11px;
   font-weight: 650;
@@ -626,20 +642,54 @@ kbd {
   font-size: 9px;
 }
 
+.result-card__meta {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.result-card__action {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.result-card__action:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+
 .result-card__body {
-  max-height: 270px;
+  max-height: min(52vh, 520px);
   padding: 11px;
   overflow: auto;
 }
 
+.result-card--expanded .result-card__body {
+  max-height: none;
+}
+
 .result-card__body .viewport-scroll {
-  max-height: 190px;
+  max-height: min(42vh, 440px);
+}
+
+.result-card--expanded .viewport-scroll {
+  max-height: none;
 }
 
 .viewport-empty {
   grid-column: 1 / -1;
   display: grid;
-  height: 100%;
+  min-height: 160px;
   place-items: center;
   color: var(--text-faint);
   text-align: center;
@@ -660,7 +710,7 @@ kbd {
 }
 
 .viewport-scroll {
-  max-height: 155px;
+  max-height: min(36vh, 360px);
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -696,7 +746,7 @@ kbd {
 
 .viewport-dl {
   display: grid;
-  grid-template-columns: repeat(5, minmax(90px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 8px;
   margin: 0 0 10px;
 }

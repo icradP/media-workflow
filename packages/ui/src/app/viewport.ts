@@ -21,6 +21,8 @@ const renderers = new Map<string, NodeRenderer>([
   ['file_export', renderFileExportEvent],
 ]);
 
+type ResultCardAction = 'collapse' | 'expand' | 'close';
+
 function viewportEl(): HTMLElement | null {
   return document.getElementById('viewport');
 }
@@ -62,7 +64,19 @@ function resultElementFor(event: NodeExecutionEvent): HTMLElement | null {
   const state = document.createElement('span');
   state.className = 'result-card__state';
   state.textContent = event.cacheHit ? 'Cached' : `${event.durationMs.toFixed(1)} ms`;
-  header.append(title, state);
+  const meta = document.createElement('div');
+  meta.className = 'result-card__meta';
+  meta.append(state, resultActionButton('collapse'), resultActionButton('expand'), resultActionButton('close'));
+  header.append(title, meta);
+  header.addEventListener('click', event => {
+    const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+      '.result-card__action',
+    );
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    handleResultCardAction(card, String(button.dataset.action) as ResultCardAction);
+  });
 
   const body = document.createElement('div');
   body.className = 'result-card__body';
@@ -70,6 +84,58 @@ function resultElementFor(event: NodeExecutionEvent): HTMLElement | null {
   viewport.append(card);
   resultElements.set(event.nodeId, body);
   return body;
+}
+
+function resultActionButton(action: ResultCardAction): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.className = 'result-card__action';
+  button.type = 'button';
+  button.dataset.action = action;
+  const labels: Record<ResultCardAction, string> = {
+    collapse: '折叠/显示',
+    expand: '展开此结果',
+    close: '关闭此结果',
+  };
+  const glyphs: Record<ResultCardAction, string> = {
+    collapse: '−',
+    expand: '□',
+    close: '×',
+  };
+  button.title = labels[action];
+  button.setAttribute('aria-label', labels[action]);
+  button.textContent = glyphs[action];
+  return button;
+}
+
+function handleResultCardAction(card: HTMLElement, action: ResultCardAction): void {
+  if (action === 'close') {
+    const nodeId = card.dataset.nodeId;
+    if (nodeId) resultElements.delete(nodeId);
+    card.remove();
+    return;
+  }
+
+  if (action === 'collapse') {
+    const isCollapsed = card.classList.toggle('result-card--collapsed');
+    const button = card.querySelector<HTMLButtonElement>('[data-action="collapse"]');
+    if (button) {
+      button.textContent = isCollapsed ? '+' : '−';
+      button.title = isCollapsed ? '显示此结果' : '折叠此结果';
+      button.setAttribute('aria-label', button.title);
+    }
+    return;
+  }
+
+  const viewport = viewportEl();
+  const wasExpanded = card.classList.contains('result-card--expanded');
+  viewport?.querySelectorAll<HTMLElement>('.result-card--expanded').forEach(candidate => {
+    candidate.classList.remove('result-card--expanded');
+  });
+  if (!wasExpanded) {
+    card.classList.remove('result-card--collapsed');
+    card.classList.add('result-card--expanded');
+    card.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
 }
 
 function renderAutoAnalyze(event: NodeExecutionEvent, element: HTMLElement): void {
@@ -145,7 +211,11 @@ function renderYuvPreviewEvent(event: NodeExecutionEvent, element: HTMLElement):
         frame.planes,
         frame.displayWidth,
         frame.displayHeight,
-        frame.strides?.[0] ?? frame.displayWidth,
+        frame.strides ?? [
+          frame.displayWidth,
+          Math.ceil(frame.displayWidth / 2),
+          Math.ceil(frame.displayWidth / 2),
+        ],
       );
     }
   } catch {
@@ -188,21 +258,24 @@ function renderI420ToCanvas(
   planes: Uint8Array[],
   width: number,
   height: number,
-  yStride: number,
+  strides: number[],
 ): void {
   if (!canvas) return;
   const context = canvas.getContext('2d');
   if (!context) return;
   const [yPlane, uPlane, vPlane] = planes;
   if (!yPlane || !uPlane || !vPlane) return;
+  const yStride = strides[0] ?? width;
+  const uvWidth = Math.ceil(width / 2);
+  const uStride = strides[1] ?? uvWidth;
+  const vStride = strides[2] ?? uvWidth;
   const image = context.createImageData(width, height);
   const rgba = image.data;
-  const uvWidth = Math.ceil(width / 2);
   for (let row = 0; row < height; row++) {
     for (let col = 0; col < width; col++) {
       const y = yPlane[row * yStride + col]!;
-      const u = uPlane[Math.floor(row / 2) * uvWidth + Math.floor(col / 2)]!;
-      const v = vPlane[Math.floor(row / 2) * uvWidth + Math.floor(col / 2)]!;
+      const u = uPlane[Math.floor(row / 2) * uStride + Math.floor(col / 2)]!;
+      const v = vPlane[Math.floor(row / 2) * vStride + Math.floor(col / 2)]!;
       const c = y - 16;
       const d = u - 128;
       const e = v - 128;

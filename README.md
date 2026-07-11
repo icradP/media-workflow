@@ -14,6 +14,7 @@ pnpm dev
 ```sh
 pnpm test:run
 pnpm test:ffprobe
+pnpm test:decode
 pnpm build
 ```
 

@@ -7,6 +7,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:ffprobe": "vitest run packages/codec/src/__tests__/ffprobe_baseline.test.ts packages/nodes/src/__tests__/workflow_presets.test.ts",
+    "test:decode": "vitest run packages/codec/src/__tests__/yuv.test.ts packages/nodes/src/__tests__/decode_baseline.test.ts packages/nodes/src/__tests__/decode_pipeline.test.ts",
     "fixtures:ffprobe": "node scripts/generate_ffprobe_baselines.mjs",
     "fixtures:decode": "node scripts/generate_decode_baselines.mjs",
     "lint": "eslint packages/*/src --ext .ts"
