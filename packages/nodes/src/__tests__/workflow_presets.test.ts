@@ -41,7 +41,7 @@ interface BaselineRecord {
 }
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-const workflowsDir = join(root, 'tests', 'workflows');
+const workflowsDir = join(root, 'packages', 'nodes', 'presets');
 const baselinesDir = join(root, 'tests', 'fixtures', 'ffprobe');
 const overviewPreset = readPreset('ffprobe-overview.workflow.json');
 const videoPreset = readPreset('ffprobe-video-track.workflow.json');

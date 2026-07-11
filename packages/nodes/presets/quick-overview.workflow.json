@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "name": "Quick Overview",
+  "description": "Load a file, analyze the container, and show stream overview.",
+  "nodes": [
+    { "id": "file", "type": "file_loader", "position": [200, 200] },
+    { "id": "analyze", "type": "auto_analyze", "position": [500, 200] },
+    { "id": "overview", "type": "stream_overview", "position": [800, 200] }
+  ],
+  "edges": [
+    {
+      "id": "file-analyze",
+      "sourceNodeId": "file",
+      "sourceOutput": "source",
+      "targetNodeId": "analyze",
+      "targetInput": "source"
+    },
+    {
+      "id": "analyze-overview",
+      "sourceNodeId": "analyze",
+      "sourceOutput": "asset",
+      "targetNodeId": "overview",
+      "targetInput": "asset"
+    }
+  ]
+}

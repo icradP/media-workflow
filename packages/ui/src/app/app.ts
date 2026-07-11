@@ -3,10 +3,10 @@
  */
 
 import { LGraph, LGraphCanvas, LiteGraph } from 'litegraph.js';
-import { nodesByCategory, allNodes } from '@media-workflow/nodes';
+import { nodesByCategory, allNodes, WORKFLOW_PRESET_CATALOG, DEFAULT_WORKFLOW_PRESET_ID } from '@media-workflow/nodes';
 import { graphToJSON, createMemoryCache, executeGraph } from '@media-workflow/core';
 import type { ExecutionCache, NodeExecutionEvent } from '@media-workflow/core';
-import { extractWorkflowFromLGraph } from './graph_adapter.js';
+import { extractWorkflowFromLGraph, loadWorkflowPresetIntoLGraph } from './graph_adapter.js';
 import { clearViewport, renderExecutionEvent } from './viewport.js';
 
 // ─── Pin type → LiteGraph color ───
@@ -91,6 +91,7 @@ interface LGraphNodeBase {
   onDrawForeground?: (context: CanvasRenderingContext2D) => void;
   pos: [number, number];
   size: [number, number];
+  computeSize(): Float32Array | [number, number];
   addInput(name: string, type: string, options?: Partial<LGraphSlot>): LGraphSlot;
   addOutput(name: string, type: string, options?: Partial<LGraphSlot>): LGraphSlot;
   addWidget(
@@ -122,7 +123,31 @@ interface RegisterNodeTypeOptions {
   onRequestFile?: (node: LGraphNodeBase) => void;
 }
 
+function configureLiteGraphLayout(): void {
+  LiteGraph.NODE_SLOT_HEIGHT = 22;
+  LiteGraph.NODE_WIDGET_HEIGHT = 22;
+  LiteGraph.NODE_TITLE_HEIGHT = 32;
+  LiteGraph.NODE_TEXT_SIZE = 12;
+}
+
+function applyComputedNodeSize(
+  node: LGraphNodeBase & { computeSize(): Float32Array | [number, number] },
+  nodeDef: (typeof allNodes)[number],
+): void {
+  const computed = node.computeSize();
+  const width = Math.max(computed[0], nodeDef.id === 'file_loader' ? 220 : 0);
+  const height = computed[1];
+
+  if (nodeDef.category === 'display') {
+    node.size = [Math.max(width, 260), height + 92];
+    return;
+  }
+
+  node.size = [width, height];
+}
+
 export function registerNodeTypes(options: RegisterNodeTypeOptions = {}) {
+  configureLiteGraphLayout();
   const canvasClass = LGraphCanvas as unknown as {
     link_type_colors: Record<string, string>;
   };
@@ -192,18 +217,11 @@ export function registerNodeTypes(options: RegisterNodeTypeOptions = {}) {
         this.displayPreview = ['等待分析结果…'];
         this.onDrawForeground = context => drawDisplayPreview(this, context);
       }
-      this.pos = [200, 200];
-      this.size = [
-        nodeDef.category === 'display' ? 260 : nodeDef.id === 'file_loader' ? 200 : 180,
-        60 +
-          Math.max(inputs.length, outputs.length) * 22 +
-          (this.fileWidget ? 32 : 0) +
-          Object.keys(nodeDef.params ?? {}).length * 32 +
-          (nodeDef.category === 'display' ? 92 : 0),
-      ];
+      applyComputedNodeSize(this, nodeDef);
       this.onExecute = () => {
         // Execution handled by @media-workflow/core scheduler
       };
+      this.pos = [200, 200];
     }
 
     NodeClass.prototype.constructor = NodeClass;
@@ -332,13 +350,79 @@ export function createApp(): MediaWorkflowApp {
     setupFilePicker();
     buildPalette();
     setupToolbar();
+    setupWorkflowPresets();
     setupThemeToggle();
     setupNodeSearch();
     setupKeyboard();
     setupCanvasDrop(canvasWrap);
 
     renderEmptyViewport();
-    loadDefaultWorkflow();
+    loadWorkflowPreset(DEFAULT_WORKFLOW_PRESET_ID);
+  }
+
+  function setupWorkflowPresets() {
+    const select = document.getElementById('workflow-preset-select') as HTMLSelectElement | null;
+    const description = document.getElementById('workflow-preset-description');
+    const loadButton = document.getElementById('load-workflow-preset-button');
+    if (!select) return;
+
+    select.innerHTML = '';
+    for (const entry of WORKFLOW_PRESET_CATALOG) {
+      const option = document.createElement('option');
+      option.value = entry.id;
+      option.textContent = entry.name;
+      select.appendChild(option);
+    }
+    select.value = DEFAULT_WORKFLOW_PRESET_ID;
+    updateWorkflowPresetDescription(description, DEFAULT_WORKFLOW_PRESET_ID);
+
+    select.addEventListener('change', () => {
+      updateWorkflowPresetDescription(description, select.value);
+    });
+
+    loadButton?.addEventListener('click', () => {
+      loadWorkflowPreset(select.value);
+    });
+  }
+
+  function updateWorkflowPresetDescription(
+    element: HTMLElement | null,
+    presetId: string,
+  ) {
+    if (!element) return;
+    const entry = WORKFLOW_PRESET_CATALOG.find(candidate => candidate.id === presetId);
+    element.textContent = entry?.description ?? '';
+  }
+
+  function loadWorkflowPreset(presetId: string) {
+    const entry = WORKFLOW_PRESET_CATALOG.find(candidate => candidate.id === presetId);
+    if (!entry) {
+      setStatus(`未知工作流预设 · ${presetId}`, 'error');
+      return;
+    }
+
+    filesByNode.clear();
+    execCache.clear();
+    clearViewport();
+    renderEmptyViewport();
+
+    if (!entry.preset) {
+      graph.clear();
+      canvas.setDirty(true, true);
+      setStatus('空白画布已载入', 'idle');
+      return;
+    }
+
+    try {
+      loadWorkflowPresetIntoLGraph(graph, entry.preset);
+      canvas.setDirty(true, true);
+      setStatus(
+        `${entry.name} 已载入 · ${entry.preset.nodes.length} 个节点 · 请选择媒体文件`,
+        'idle',
+      );
+    } catch (error) {
+      setStatus(`预设载入失败 · ${String(error)}`, 'error');
+    }
   }
 
   function setupFilePicker() {
@@ -603,35 +687,6 @@ export function createApp(): MediaWorkflowApp {
       `工作流已序列化 · ${workflow.nodes.size} 个节点 · ${workflow.edges.length} 条连线`,
       'success',
     );
-  }
-
-  function loadDefaultWorkflow() {
-    const nodeIds = ['file_loader', 'auto_analyze', 'stream_overview'];
-    let x = 200;
-
-    for (const id of nodeIds) {
-      const typeName = `media/${id}`;
-      const node = LiteGraph.createNode(typeName) as unknown as LGraphNodeBase & {
-        id: number;
-        pos: [number, number];
-        connect(slot: number, target: LGraphNodeBase, targetSlot: number): void;
-      };
-      node.pos = [x, 200];
-      (graph as { add(node: unknown): void }).add(node);
-      x += 300;
-    }
-
-    const nodeList = (graph as unknown as {
-      _nodes: Array<{ connect: (s: number, t: LGraphNodeBase, ts: number) => void }>;
-    })._nodes;
-
-    if (nodeList && nodeList.length >= 3) {
-      nodeList[0]!.connect(0, nodeList[1] as unknown as LGraphNodeBase, 0);
-      nodeList[1]!.connect(0, nodeList[2] as unknown as LGraphNodeBase, 0);
-    }
-
-    canvas.setDirty(true, true);
-    setStatus('默认工作流已载入 · 请选择媒体文件', 'idle');
   }
 
   function setStatus(msg: string, state: StatusState = 'idle') {

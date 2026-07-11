@@ -19,7 +19,7 @@ import { fileLoaderNode } from '../source/file_loader.js';
 import { nodeRegistry } from '../registry.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-const workflowsDir = join(root, 'tests', 'workflows');
+const workflowsDir = join(root, 'packages', 'nodes', 'presets');
 
 describe('decode pipeline nodes', () => {
   it('registers planner, decoder, encoder and export nodes', () => {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { LGraph, LiteGraph } from 'litegraph.js';
+import { WORKFLOW_PRESET_CATALOG } from '@media-workflow/nodes';
 import { registerNodeTypes } from './app.js';
-import { extractWorkflowFromLGraph } from './graph_adapter.js';
+import { extractWorkflowFromLGraph, loadWorkflowPresetIntoLGraph } from './graph_adapter.js';
 
 describe('LiteGraph workflow adapter', () => {
   it('creates compatible typed ports and maps their links to workflow edges', () => {
@@ -77,6 +78,32 @@ describe('LiteGraph workflow adapter', () => {
         sourceOutput: 'samples',
         targetNodeId: String(frameHexNode.id),
         targetInput: 'bytes',
+      },
+    ]);
+  });
+
+  it('loads a workflow preset into LiteGraph with matching edges', () => {
+    registerNodeTypes();
+    const graph = new LGraph();
+    const preset = WORKFLOW_PRESET_CATALOG.find(entry => entry.id === 'quick-overview')?.preset;
+    expect(preset).toBeDefined();
+
+    loadWorkflowPresetIntoLGraph(graph, preset!);
+
+    const extracted = extractWorkflowFromLGraph(graph);
+    expect([...extracted.nodeTypes.values()]).toEqual([
+      'file_loader',
+      'auto_analyze',
+      'stream_overview',
+    ]);
+    expect(extracted.graph.edges).toMatchObject([
+      {
+        sourceOutput: 'source',
+        targetInput: 'source',
+      },
+      {
+        sourceOutput: 'asset',
+        targetInput: 'asset',
       },
     ]);
   });

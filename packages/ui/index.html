@@ -67,6 +67,18 @@
       </div>
       <div class="inspector-body">
         <section class="inspector-section">
+          <h4>工作流预设</h4>
+          <label class="preset-field">
+            <span class="preset-field__label">选择模板</span>
+            <select id="workflow-preset-select" aria-label="工作流预设"></select>
+          </label>
+          <p id="workflow-preset-description" class="preset-description"></p>
+          <button id="load-workflow-preset-button" class="button button--block" type="button">
+            载入预设
+          </button>
+        </section>
+
+        <section class="inspector-section">
           <h4>快捷操作</h4>
           <div class="shortcut-list">
             <div class="shortcut-row"><span>运行工作流</span><kbd>⌘ ↵</kbd></div>

@@ -8,8 +8,12 @@ import type {
   NodeParamDef,
   WorkflowGraph,
 } from '@media-workflow/core';
-import type { LGraph } from 'litegraph.js';
-import { mediaSourceFromFile, nodeRegistry } from '@media-workflow/nodes';
+import { LiteGraph, type LGraph } from 'litegraph.js';
+import {
+  mediaSourceFromFile,
+  nodeRegistry,
+  type WorkflowPreset,
+} from '@media-workflow/nodes';
 
 interface LGraphNodeLike {
   id: number;
@@ -123,6 +127,92 @@ function coerceParamValue(definition: NodeParamDef, value: unknown): string | nu
       return definition.values.includes(String(value)) ? String(value) : definition.default;
     case 'string':
       return String(value);
+  }
+}
+
+function findOutputSlot(node: LGraphNodeLike, outputName: string): number {
+  const index = node.outputs?.findIndex(output => output.name === outputName) ?? -1;
+  if (index < 0) {
+    throw new Error(`Output ${outputName} not found on node ${node.id}`);
+  }
+  return index;
+}
+
+function findInputSlot(node: LGraphNodeLike, inputName: string): number {
+  const index = node.inputs?.findIndex(input => input.name === inputName) ?? -1;
+  if (index < 0) {
+    throw new Error(`Input ${inputName} not found on node ${node.id}`);
+  }
+  return index;
+}
+
+export function loadWorkflowPresetIntoLGraph(
+  graph: LGraph,
+  preset: WorkflowPreset,
+): void {
+  graph.clear();
+
+  const instanceMap = new Map<string, LGraphNodeLike & {
+    pos: [number, number];
+    properties: Record<string, unknown>;
+    connect(
+      outputSlot: number,
+      targetNode: LGraphNodeLike,
+      targetSlot: number,
+    ): unknown;
+  }>();
+
+  for (const instance of preset.nodes) {
+    const typeName = `media/${instance.type}`;
+    if (!nodeRegistry.has(instance.type)) {
+      throw new Error(`Unknown preset node type: ${instance.type}`);
+    }
+
+    const node = LiteGraph.createNode(typeName) as (LGraphNodeLike & {
+      pos: [number, number];
+      properties: Record<string, unknown>;
+      connect(
+        outputSlot: number,
+        targetNode: LGraphNodeLike,
+        targetSlot: number,
+      ): unknown;
+    }) | null;
+    if (!node) {
+      throw new Error(`Failed to create LiteGraph node: ${instance.type}`);
+    }
+
+    node.pos = instance.position
+      ? [instance.position[0], instance.position[1]]
+      : [200, 200];
+    node.properties ??= {};
+
+    for (const [paramName, value] of Object.entries(instance.params ?? {})) {
+      node.properties[paramName] = value;
+      const widget = (node as {
+        widgets?: Array<{ name: string; value: unknown }>;
+      }).widgets?.find(candidate => candidate.name === paramName);
+      if (widget) widget.value = value;
+    }
+
+    graph.add(node as never);
+    instanceMap.set(instance.id, node);
+  }
+
+  for (const edge of preset.edges) {
+    const source = instanceMap.get(edge.sourceNodeId);
+    const target = instanceMap.get(edge.targetNodeId);
+    if (!source || !target) {
+      throw new Error(`Preset edge ${edge.id} references missing node instance`);
+    }
+
+    const outputSlot = findOutputSlot(source, edge.sourceOutput);
+    const inputSlot = findInputSlot(target, edge.targetInput);
+    const link = source.connect(outputSlot, target, inputSlot);
+    if (link == null) {
+      throw new Error(
+        `Failed to connect ${edge.sourceNodeId}.${edge.sourceOutput} → ${edge.targetNodeId}.${edge.targetInput}`,
+      );
+    }
   }
 }
 
