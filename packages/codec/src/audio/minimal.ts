@@ -2,7 +2,7 @@
  * Pure audio format parsers — WAV, FLAC, MP3, Opus header extraction.
  */
 
-import type { MediaAnalysisResult, StreamInfo } from '@media-workflow/core';
+import type { FrameInfo, MediaAnalysisResult, StreamInfo } from '@media-workflow/core';
 
 function parseWavHeader(data: Uint8Array): StreamInfo | null {
   if (data.length < 44) return null;
@@ -14,7 +14,7 @@ function parseWavHeader(data: Uint8Array): StreamInfo | null {
   const bitsPerSample = view.getUint16(34, true);
   const dataSize = view.getUint32(40, true);
   const durationMs = byteRate > 0 ? (dataSize / byteRate) * 1_000 : undefined;
-  const sampleCount = channels > 0 && bitsPerSample > 0
+  const pcmSampleCount = channels > 0 && bitsPerSample > 0
     ? Math.floor(dataSize / (channels * (bitsPerSample / 8)))
     : undefined;
   const codecName = audioFormat === 1 ? 'PCM' : audioFormat === 3 ? 'IEEE Float' : `WAV format ${audioFormat}`;
@@ -24,9 +24,8 @@ function parseWavHeader(data: Uint8Array): StreamInfo | null {
     codecConfig: null,
     durationMs,
     bitrate: byteRate > 0 ? byteRate * 8 : undefined,
-    sampleCount,
     timeBase: sampleRate > 0 ? { numerator: 1, denominator: sampleRate } : undefined,
-    metadata: { bitsPerSample },
+    metadata: { bitsPerSample, pcmSampleCount, dataOffset: 44, dataSize },
     audio: { sampleRate, channels },
   };
 }
@@ -62,10 +61,7 @@ function parseMp3Header(data: Uint8Array): StreamInfo | null {
   let offset = firstOffset;
   while (offset + 4 <= data.byteLength) {
     const frame = parseMp3FrameHeader(data, offset);
-    if (!frame) {
-      offset++;
-      continue;
-    }
+    if (!frame) break;
     frameCount++;
     offset += frame.frameLength;
   }
@@ -177,20 +173,94 @@ function parseOpusHeader(data: Uint8Array): StreamInfo | null {
 
 export function parseMinimalAudioByFormat(data: Uint8Array, format: string): MediaAnalysisResult {
   let stream: StreamInfo | null = null;
+  let frames: FrameInfo[] = [];
 
   switch (format) {
-    case 'wav': stream = parseWavHeader(data); break;
+    case 'wav':
+      stream = parseWavHeader(data);
+      frames = stream ? buildWavFrames(data, stream) : [];
+      break;
     case 'flac': stream = parseFlacHeader(data); break;
-    case 'mp3': stream = parseMp3Header(data); break;
+    case 'mp3':
+      stream = parseMp3Header(data);
+      frames = stream ? buildMp3Frames(data) : [];
+      break;
     case 'opus': stream = parseOpusHeader(data); break;
     default: break;
   }
+  if (stream) stream.sampleCount = frames.length || stream.sampleCount;
 
   return {
     format: { container: 'raw_audio', subtype: format, details: {} },
     streams: stream ? [stream] : [],
-    frames: [],
+    frames,
     formatSpecific: {},
     fileSize: data.byteLength,
   };
+}
+
+function buildWavFrames(data: Uint8Array, stream: StreamInfo): FrameInfo[] {
+  const sampleRate = stream.audio?.sampleRate ?? 0;
+  const channels = stream.audio?.channels ?? 0;
+  const bitsPerSample = Number(stream.metadata?.bitsPerSample) || 0;
+  const pcmSampleCount = Number(stream.metadata?.pcmSampleCount) || 0;
+  const dataOffset = Number(stream.metadata?.dataOffset) || 44;
+  if (sampleRate <= 0 || channels <= 0 || bitsPerSample <= 0 || pcmSampleCount <= 0) return [];
+
+  const samplesPerPacket = 4_096;
+  const bytesPerPcmSample = channels * (bitsPerSample / 8);
+  const frames: FrameInfo[] = [];
+  for (
+    let firstSample = 0, index = 0;
+    firstSample < pcmSampleCount;
+    firstSample += samplesPerPacket, index++
+  ) {
+    const sampleCount = Math.min(samplesPerPacket, pcmSampleCount - firstSample);
+    const offset = dataOffset + firstSample * bytesPerPcmSample;
+    const size = Math.min(sampleCount * bytesPerPcmSample, data.byteLength - offset);
+    const pts = (firstSample / sampleRate) * 1_000;
+    frames.push({
+      index,
+      streamIndex: 0,
+      kind: 'audio',
+      dts: pts,
+      pts,
+      duration: (sampleCount / sampleRate) * 1_000,
+      offset,
+      size,
+      isKey: true,
+      rawData: data.subarray(offset, offset + size),
+      dataOrigin: 'source_slice',
+    });
+  }
+  return frames;
+}
+
+function buildMp3Frames(data: Uint8Array): FrameInfo[] {
+  const firstOffset = findFirstMp3Frame(data);
+  if (firstOffset < 0) return [];
+  const frames: FrameInfo[] = [];
+  let offset = firstOffset;
+  let decodedSamples = 0;
+  while (offset + 4 <= data.byteLength) {
+    const header = parseMp3FrameHeader(data, offset);
+    if (!header) break;
+    const pts = (decodedSamples / header.sampleRate) * 1_000;
+    frames.push({
+      index: frames.length,
+      streamIndex: 0,
+      kind: 'audio',
+      dts: pts,
+      pts,
+      duration: (header.samplesPerFrame / header.sampleRate) * 1_000,
+      offset,
+      size: header.frameLength,
+      isKey: true,
+      rawData: data.subarray(offset, offset + header.frameLength),
+      dataOrigin: 'source_slice',
+    });
+    decodedSamples += header.samplesPerFrame;
+    offset += header.frameLength;
+  }
+  return frames;
 }

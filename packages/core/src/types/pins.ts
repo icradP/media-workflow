@@ -7,16 +7,24 @@
 
 import type {
   BufferData,
+  ByteData,
   MediaSource,
   MediaProbe,
   MediaAsset,
   MediaTrack,
   MediaSample,
+  EncodedPacket,
+  VideoDecodeRequest,
+  AudioDecodeRequest,
+  DecodedVideoFrame,
+  DecodedVideoFrameSet,
+  PcmAudioClip,
+  EncodedTrack,
+  MediaFile,
   MediaAnalysisResult,
   StreamInfo,
   FrameInfo,
   CompressedFrame,
-  VideoFrameData,
   AudioBufferData,
   NalUnitData,
   DetectionResult,
@@ -31,12 +39,20 @@ export type ScalarPinType = 'number' | 'string' | 'boolean' | 'enum';
 
 export type DataPinType =
   | 'buffer'
+  | 'byte_data'
   | 'media_source'
   | 'media_probe'
   | 'media_asset'
   | 'track_list'
   | 'media_track'
   | 'media_samples'
+  | 'encoded_packets'
+  | 'video_decode_request'
+  | 'audio_decode_request'
+  | 'decoded_video_frames'
+  | 'pcm_audio'
+  | 'encoded_track'
+  | 'media_file'
   | 'media'
   | 'stream'
   | 'frames'
@@ -58,17 +74,25 @@ export type PinType = ScalarPinType | DataPinType;
 export interface PinDataMap {
   // ─── 大块数据 ───
   buffer: BufferData;
+  byte_data: ByteData;
   media_source: MediaSource;
   media_probe: MediaProbe;
   media_asset: MediaAsset;
   track_list: MediaTrack[];
   media_track: MediaTrack;
   media_samples: MediaSample[];
+  encoded_packets: EncodedPacket[];
+  video_decode_request: VideoDecodeRequest;
+  audio_decode_request: AudioDecodeRequest;
+  decoded_video_frames: DecodedVideoFrameSet;
+  pcm_audio: PcmAudioClip;
+  encoded_track: EncodedTrack;
+  media_file: MediaFile;
   media: MediaAnalysisResult;
   stream: StreamInfo;
   frames: FrameInfo[];
   compressed: CompressedFrame;
-  video_frame: VideoFrameData;
+  video_frame: DecodedVideoFrame;
   audio_buffer: AudioBufferData;
   nal_units: NalUnitData;
   detections: DetectionResult;

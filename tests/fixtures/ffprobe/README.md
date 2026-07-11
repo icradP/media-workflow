@@ -20,6 +20,7 @@ Each record contains:
 - input size and SHA-256, so stale baselines fail tests;
 - normalized expected format and stream fields used by assertions;
 - complete FFprobe format, stream, program, and chapter metadata;
+- first key video packet size, SHA-256, and 512-byte hex prefix;
 - FFmpeg full-decode warnings and exit status.
 
 `packages/codec/src/__tests__/ffprobe_baseline.test.ts` compares the canonical

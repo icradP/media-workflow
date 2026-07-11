@@ -137,6 +137,10 @@ export interface ParsedFlvTag {
   pictureType?: string;
   isKeyframe?: boolean;
   codecId?: string;
+  avcPacketType?: number;
+  soundFormat?: number;
+  avcSequenceHeader?: Uint8Array;
+  aacSequenceHeader?: Uint8Array;
 }
 
 export function parseFlvTagAt(
@@ -172,11 +176,13 @@ export function parseFlvTagAt(
     if (codecId === 7 && body.length > 5) {
       // AVC
       const avcPacketType = body[1];
+      tag.avcPacketType = avcPacketType;
       const compTime = (body[2]! << 16) | (body[3]! << 8) | body[4]!;
 
       if (avcPacketType === 0) {
         // Sequence header — parse SPS from avcC
         const avcC = new Uint8Array(body.buffer, body.byteOffset + 5, body.length - 5);
+        tag.avcSequenceHeader = avcC.slice();
         // Parse SPS from avcC: skip configurationVersion(1)+profile(1)+compat(1)+level(1)+lengthSizeMinus1(1)
         if (avcC.length > 7) {
           const numSps = avcC[5]! & 0x1f;
@@ -247,16 +253,15 @@ export function parseFlvTagAt(
   } else if (tagType === 8) {
     // ─── Audio tag ───
     const soundFormat = (body[0]! >> 4) & 0x0f;
-    const soundRate = (body[0]! >> 2) & 0x03;
-    const soundSize = (body[0]! >> 1) & 0x01;
-    const soundType = body[0]! & 0x01;
+    tag.soundFormat = soundFormat;
 
     if (soundFormat === 10 && body.length > 1) {
       // AAC
       const aacPacketType = body[1];
       if (aacPacketType === 0 && body.length > 2) {
         // AAC sequence header
-        tag.audioConfig = parseAudioSpecificConfig(body.slice(2));
+        tag.aacSequenceHeader = body.slice(2);
+        tag.audioConfig = parseAudioSpecificConfig(tag.aacSequenceHeader);
       }
     }
   } else if (tagType === 18 && body.length > 4) {

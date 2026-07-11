@@ -69,7 +69,15 @@
         "extradataSize": 32,
         "tags": {}
       }
-    ]
+    ],
+    "firstKeyVideoPacket": {
+      "pts": 185135182,
+      "dts": 185135182,
+      "pos": 564,
+      "size": 119526,
+      "sha256": "098464607ded7ff71d7a274af731698850f327d3be25655324286a092ceda2f4",
+      "hexPrefix": "0000000109f0000000016742c029e900f0044bcb00b08846a000000000000000000168ce3c80000000016588800083600bffffe68a00077df92ab8e18e3261b880930f864ffffd46ab9d6bae27d56a56ffffef513fad54bff50a61fc9ff65ff42989e7ffedde10c3e64fff31afffff86355af68530fd0affff51f9bfffedfffff13a7696abac2185cb2bffb3f853095820fff9e91be6ebfffff19a9b26a2ebee10c786ee9e65bf3aafffff11da13c2daaaafd7ffff517ba8aaaaebad4f297ffffefaaaaf55aaabffffebd6be6ecd56b7ffffea379dcd755d556b5ffffd4ecbb27d556aab5366fffffdd5a5aaad557171c68572fffff5a9beb5595a95554d95ffffdd55555aaaabb35517367fffea6c7799d45c4f145cbc5c4f275040dffffd4d85e5e6c517955d6bc6305988e7432847e939393939393938630123d6fcfffd3990a7fd3ffffd7bbbbbbbc56e2b10e58dc60fffff57158ac30f3bddec56e5c7dc69e7ffff5777777777777777913ffffabeeeeeeeeeeeefeffffef15bd9bbbbbbbbbbbffffeaeeecaef971fb72e361dffffdcbeb72e6f7bb7bbbffffeaef797efa4eef6ffffeedf8add3e5f8cf371cb8cdfffff5bbbbbbeddeeefeffffeb77772f7deef7776ffffefe93dee9c56e32bfffff7777ddcb9bfbbffffeaefeeef779526f6ffffeafbbf2b16fbb97f42186050f5ffe10c40e66187c95febffffb8ee45"
+    }
   },
   "probe": {
     "exitCode": 0,
@@ -323,6 +331,10 @@
     }
   },
   "decodeValidation": {
+    "exitCode": 0,
+    "warnings": []
+  },
+  "packetProbe": {
     "exitCode": 0,
     "warnings": []
   }

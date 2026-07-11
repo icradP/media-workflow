@@ -13,6 +13,7 @@ import type {
   StreamInfo,
   VideoMediaTrack,
 } from '@media-workflow/core';
+import { buildDecoderConfig } from './packet/config.js';
 import { detectContainerFormat } from './detect.js';
 
 const FORMAT_NAMES: Record<DetectedMediaFormat, string> = {
@@ -63,7 +64,7 @@ export function normalizeAnalysis(
   const tracks = legacy.streams.map((stream, index) =>
     normalizeTrack(stream, index, probe.format),
   );
-  const samples = normalizeSamples(legacy.frames, tracks, diagnostics);
+  const samples = normalizeSamples(legacy.frames, tracks, diagnostics, source);
   const samplesByTrack = countSamplesByTrack(samples);
   const legacyDurationUs = durationFromLegacyContainer(legacy);
 
@@ -214,6 +215,7 @@ function normalizeTrack(
         : undefined,
       frameRate: positive(stream.video?.framerate),
     };
+    track.decoderConfig = buildDecoderConfig(track, format);
     return track;
   }
 
@@ -226,6 +228,7 @@ function normalizeTrack(
       profile: stream.audio?.profile,
       samplesPerFrame: positive(stream.audio?.samplesPerFrame),
     };
+    track.decoderConfig = buildDecoderConfig(track, format);
     return track;
   }
 
@@ -236,6 +239,7 @@ function normalizeSamples(
   frames: FrameInfo[],
   tracks: MediaTrack[],
   diagnostics: MediaDiagnostic[],
+  source: MediaSource,
 ): MediaSample[] {
   return frames.flatMap((frame, index) => {
     const directTrack = tracks.find(track =>
@@ -265,13 +269,34 @@ function normalizeSamples(
       size: finiteNonNegative(frame.size),
       isKey: frame.isKey,
       pictureType: frame.pictureType,
+      data: frame.rawData ?? sliceSourceBytes(source, frame.offset, frame.size),
       metadata: {
         legacyFrameIndex: frame.index,
         isIdr: frame.isIdr,
         frameNum: frame.frameNum,
+        dataOrigin: frame.dataOrigin ??
+          (frame.rawData ? 'demuxed_payload' : 'source_slice'),
+        ...frame.metadata,
       },
     }];
   });
+}
+
+function sliceSourceBytes(
+  source: MediaSource,
+  offset: number,
+  size: number,
+): Uint8Array | undefined {
+  if (
+    !Number.isFinite(offset) ||
+    !Number.isFinite(size) ||
+    offset < 0 ||
+    size <= 0 ||
+    offset + size > source.data.byteLength
+  ) {
+    return undefined;
+  }
+  return source.data.subarray(offset, offset + size);
 }
 
 function normalizeCodecFamily(stream: StreamInfo): CodecFamily {

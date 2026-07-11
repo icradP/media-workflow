@@ -13,12 +13,20 @@ import { clearViewport, renderExecutionEvent } from './viewport.js';
 
 const PIN_COLORS: Record<string, string> = {
   buffer: '#4ecdc4',
+  byte_data: '#4ecdc4',
   media_source: '#4ecdc4',
   media_probe: '#8b93a7',
   media_asset: '#ff6b6b',
   track_list: '#a29bfe',
   media_track: '#7c5cff',
   media_samples: '#feca57',
+  encoded_packets: '#ff9f43',
+  video_decode_request: '#54a0ff',
+  audio_decode_request: '#5f27cd',
+  decoded_video_frames: '#48dbfb',
+  pcm_audio: '#5f27cd',
+  encoded_track: '#ff9f43',
+  media_file: '#10ac84',
   media: '#ff6b6b',
   stream: '#a29bfe',
   frames: '#feca57',
@@ -34,6 +42,28 @@ const PIN_COLORS: Record<string, string> = {
   enum: '#dfe6e9',
 };
 
+const BYTE_DATA_LITEGRAPH_TYPES = [
+  'byte_data',
+  'buffer',
+  'media_source',
+  'media_asset',
+  'media_samples',
+  'encoded_packets',
+  'decoded_video_frames',
+  'pcm_audio',
+  'encoded_track',
+  'media_file',
+  'compressed',
+  'video_frame',
+  'audio_buffer',
+  'nal_units',
+  'sei_payload',
+].join(',');
+
+function liteGraphInputType(pinType: string): string {
+  return pinType === 'byte_data' ? BYTE_DATA_LITEGRAPH_TYPES : pinType;
+}
+
 const CATEGORY_COLORS: Record<string, string> = {
   source: '#4ecdc4',
   parser: '#7c5cff',
@@ -42,6 +72,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   analysis: '#f368e0',
   display: '#feca57',
   utility: '#8b93a7',
+  encoder: '#10ac84',
+  export: '#10ac84',
 };
 
 type StatusState = 'idle' | 'running' | 'success' | 'error';
@@ -104,7 +136,7 @@ export function registerNodeTypes(options: RegisterNodeTypeOptions = {}) {
 
     const inputs = Object.entries(nodeDef.inputs).map(([name, def]) => ({
       name,
-      type: def.type,
+      type: liteGraphInputType(def.type),
       label: def.label,
       color: PIN_COLORS[def.type],
     }));

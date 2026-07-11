@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "name": "Decode First Keyframe Request",
+  "description": "Analyze FLV media, select the first video track, and plan a single-keyframe GOP decode request.",
+  "nodes": [
+    { "id": "file", "type": "file_loader", "position": [80, 160] },
+    { "id": "analyze", "type": "auto_analyze", "position": [360, 160] },
+    {
+      "id": "select-video",
+      "type": "track_selector",
+      "position": [640, 80],
+      "params": { "kind": "video", "index": 0 }
+    },
+    {
+      "id": "request-frame",
+      "type": "video_frame_request",
+      "position": [920, 160],
+      "params": {
+        "startIndex": 0,
+        "endIndex": -1,
+        "startTimeSeconds": 0,
+        "endTimeSeconds": -1,
+        "frameType": "key",
+        "limit": 1,
+        "outputFormat": "I420"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "file-analyze",
+      "sourceNodeId": "file",
+      "sourceOutput": "source",
+      "targetNodeId": "analyze",
+      "targetInput": "source"
+    },
+    {
+      "id": "analyze-select-video",
+      "sourceNodeId": "analyze",
+      "sourceOutput": "asset",
+      "targetNodeId": "select-video",
+      "targetInput": "asset"
+    },
+    {
+      "id": "analyze-request-frame",
+      "sourceNodeId": "analyze",
+      "sourceOutput": "asset",
+      "targetNodeId": "request-frame",
+      "targetInput": "asset"
+    },
+    {
+      "id": "select-request-frame",
+      "sourceNodeId": "select-video",
+      "sourceOutput": "track",
+      "targetNodeId": "request-frame",
+      "targetInput": "track"
+    }
+  ]
+}

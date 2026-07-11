@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "generator": {
+    "ffmpeg": "ffmpeg version 7.1.1-7.1 Copyright (c) 2000-2025 the FFmpeg developers"
+  },
+  "input": {
+    "file": "tests/test.ts",
+    "size": 5040468,
+    "sha256": "d9680cb271379a5c84c99a394cc7ff210c89085b069bea4c0f49ab2163ccd84c"
+  },
+  "video": {
+    "available": true,
+    "width": 1920,
+    "height": 1080,
+    "byteLength": 3110400,
+    "sha256": "daa141aa7b0b350b3249633839d870134d3825551c4a1627eb1d305111a12d42",
+    "outputFile": "tests/fixtures/decode/test.first-key.yuv"
+  },
+  "audio": {
+    "available": true,
+    "sampleRate": 48000,
+    "channels": 2,
+    "sampleCount": 225141,
+    "byteLength": 1801128,
+    "sha256": "277ecca32e77951e878ca25ccc8f5f345f584814ae6b580633c536a456f1075e",
+    "outputFile": "tests/fixtures/decode/test.5s.f32le.pcm"
+  },
+  "wav": {
+    "available": true,
+    "codec": "pcm_s16le",
+    "sampleRate": 48000,
+    "channels": 2,
+    "durationSeconds": 4.690437,
+    "byteLength": 900642,
+    "sha256": "6dfd3dd26a7ec6c940d5a6a1c6a1ca31488e513920dcb5e78163580dd7b28261",
+    "outputFile": "tests/fixtures/decode/test.5s.wav"
+  }
+}

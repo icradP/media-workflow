@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "name": "Decode Audio Range Request",
+  "description": "Analyze FLV media and plan a 5-second AAC decode range.",
+  "nodes": [
+    { "id": "file", "type": "file_loader", "position": [80, 160] },
+    { "id": "analyze", "type": "auto_analyze", "position": [360, 160] },
+    {
+      "id": "select-audio",
+      "type": "track_selector",
+      "position": [640, 80],
+      "params": { "kind": "audio", "index": 0 }
+    },
+    {
+      "id": "request-audio",
+      "type": "audio_range_request",
+      "position": [920, 160],
+      "params": {
+        "startTimeSeconds": 0,
+        "endTimeSeconds": 5
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "file-analyze",
+      "sourceNodeId": "file",
+      "sourceOutput": "source",
+      "targetNodeId": "analyze",
+      "targetInput": "source"
+    },
+    {
+      "id": "analyze-select-audio",
+      "sourceNodeId": "analyze",
+      "sourceOutput": "asset",
+      "targetNodeId": "select-audio",
+      "targetInput": "asset"
+    },
+    {
+      "id": "analyze-request-audio",
+      "sourceNodeId": "analyze",
+      "sourceOutput": "asset",
+      "targetNodeId": "request-audio",
+      "targetInput": "asset"
+    },
+    {
+      "id": "select-request-audio",
+      "sourceNodeId": "select-audio",
+      "sourceOutput": "track",
+      "targetNodeId": "request-audio",
+      "targetInput": "track"
+    }
+  ]
+}

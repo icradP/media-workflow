@@ -116,10 +116,7 @@ describe('real media fixtures match FFprobe baselines', () => {
           expect(actual.profile?.toLowerCase()).toContain(profileToken(expected.profile));
         }
       }
-      if (
-        expected.frameCount !== null &&
-        expectedFormat !== 'wav'
-      ) {
+      if (expected.frameCount !== null) {
         expect(Math.abs(actual.sampleCount - expected.frameCount)).toBeLessThanOrEqual(5);
       }
     }

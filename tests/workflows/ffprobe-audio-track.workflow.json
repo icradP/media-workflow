@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "name": "FFprobe Audio Track Validation",
+  "description": "Select the first audio track, filter its first 50 frames, and inspect bytes.",
+  "nodes": [
+    { "id": "file", "type": "file_loader", "position": [40, 180] },
+    { "id": "analyze", "type": "auto_analyze", "position": [300, 180] },
+    {
+      "id": "track",
+      "type": "track_selector",
+      "position": [580, 80],
+      "params": { "kind": "audio", "index": 0 }
+    },
+    { "id": "detail", "type": "track_detail", "position": [900, 20] },
+    {
+      "id": "select-frames",
+      "type": "frame_selector",
+      "position": [880, 260],
+      "params": {
+        "startIndex": 0,
+        "endIndex": 49,
+        "startTimeSeconds": 0,
+        "endTimeSeconds": -1,
+        "frameType": "all"
+      }
+    },
+    { "id": "frame-table", "type": "frame_table", "position": [1220, 190] },
+    {
+      "id": "frame-hex",
+      "type": "hex_view",
+      "position": [1220, 430],
+      "params": { "offset": 0, "length": 512 }
+    }
+  ],
+  "edges": [
+    {
+      "id": "file-analyze",
+      "sourceNodeId": "file",
+      "sourceOutput": "source",
+      "targetNodeId": "analyze",
+      "targetInput": "source"
+    },
+    {
+      "id": "analyze-track",
+      "sourceNodeId": "analyze",
+      "sourceOutput": "asset",
+      "targetNodeId": "track",
+      "targetInput": "asset"
+    },
+    {
+      "id": "track-detail",
+      "sourceNodeId": "track",
+      "sourceOutput": "track",
+      "targetNodeId": "detail",
+      "targetInput": "track"
+    },
+    {
+      "id": "analyze-select-frames",
+      "sourceNodeId": "analyze",
+      "sourceOutput": "asset",
+      "targetNodeId": "select-frames",
+      "targetInput": "asset"
+    },
+    {
+      "id": "track-select-frames",
+      "sourceNodeId": "track",
+      "sourceOutput": "track",
+      "targetNodeId": "select-frames",
+      "targetInput": "track"
+    },
+    {
+      "id": "frames-table",
+      "sourceNodeId": "select-frames",
+      "sourceOutput": "samples",
+      "targetNodeId": "frame-table",
+      "targetInput": "samples"
+    },
+    {
+      "id": "frames-hex",
+      "sourceNodeId": "select-frames",
+      "sourceOutput": "samples",
+      "targetNodeId": "frame-hex",
+      "targetInput": "bytes"
+    }
+  ]
+}

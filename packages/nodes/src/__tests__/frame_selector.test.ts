@@ -75,6 +75,11 @@ describe('Frame Selector', () => {
     ]);
   });
 
+  it('can return only the first matching key frame', async () => {
+    const selected = await execute({ frameType: 'key', limit: 1 });
+    expect(selected.map(item => item.index)).toEqual([0]);
+  });
+
   it('rejects a track from another asset', async () => {
     await expect(execute({}, { ...track, trackId: 'other' })).rejects.toThrow(
       'does not belong to this asset',

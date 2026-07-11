@@ -14,3 +14,7 @@ export type { DetectedFormat } from './detect.js';
 export { analyzeByDetectedFormat } from './analyze.js';
 export { analyzeMediaSource } from './analyze.js';
 export { normalizeAnalysis, probeMediaSource, validateMediaAsset } from './normalize.js';
+export * from './packet/index.js';
+export * from './planner/index.js';
+export * from './decode/index.js';
+export * from './encode/index.js';

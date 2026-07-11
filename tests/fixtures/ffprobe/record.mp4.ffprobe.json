@@ -63,5 +63,6 @@
       "Error parsing options for output file -.",
       "Error opening output files: Invalid argument"
     ]
-  }
+  },
+  "packetProbe": null
 }

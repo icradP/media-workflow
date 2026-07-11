@@ -7,6 +7,7 @@
 
 import { nodeRegistry } from '@media-workflow/nodes';
 import { createContext } from '@media-workflow/core';
+import { extractTransferablesFromDecodedOutput } from '@media-workflow/core/decoder';
 
 self.onmessage = async (event: MessageEvent) => {
   const { type, nodeId, inputs, params } = event.data;
@@ -28,24 +29,9 @@ self.onmessage = async (event: MessageEvent) => {
       outputs[key] = value;
     }
     // 将 Transferable 对象 (ArrayBuffer 等) 传回主线程
-    const transferables = extractTransferables(outputs);
+    const transferables = extractTransferablesFromDecodedOutput(outputs);
     self.postMessage({ type: 'result', nodeId, outputs }, { transfer: transferables });
   } catch (err) {
     self.postMessage({ type: 'error', nodeId, error: String(err) });
   }
 };
-
-function extractTransferables(outputs: Record<string, unknown>): ArrayBuffer[] {
-  const transferables: ArrayBuffer[] = [];
-  for (const value of Object.values(outputs)) {
-    if (value instanceof ArrayBuffer) {
-      transferables.push(value);
-    } else if (value instanceof Uint8Array && value.byteOffset === 0) {
-      transferables.push(value.buffer as ArrayBuffer);
-    } else if (value && typeof value === 'object' && 'data' in value && value.data instanceof Uint8Array) {
-      const arr = value.data as Uint8Array;
-      if (arr.byteOffset === 0) transferables.push(arr.buffer as ArrayBuffer);
-    }
-  }
-  return transferables;
-}

@@ -7,3 +7,4 @@ export type * from './types/index.js';
 export * from './graph/index.js';
 export * from './runtime/index.js';
 export * from './resources/index.js';
+export * from './decoder/index.js';

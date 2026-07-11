@@ -52,6 +52,7 @@ export const frameSelectorNode: NodeDefinition<
       default: 'all',
       values: ['all', 'key', 'non_key', 'I', 'P', 'B', 'IDR'],
     },
+    limit: { name: 'limit', type: 'number', default: -1, min: -1, step: 1 },
   },
   async execute(ctx, { inputs, params }) {
     const asset = inputs.asset as MediaAsset | undefined;
@@ -74,8 +75,9 @@ export const frameSelectorNode: NodeDefinition<
       ? endTimeSeconds * 1_000_000
       : undefined;
     const frameType = normalizeFrameFilter(params.frameType);
+    const limit = optionalUpperBound(params.limit);
 
-    const samples = trackSamples.filter((sample, position) => {
+    const filtered = trackSamples.filter((sample, position) => {
       const relativePtsUs = sample.ptsUs - firstPtsUs;
       return (
         position >= startIndex &&
@@ -85,6 +87,7 @@ export const frameSelectorNode: NodeDefinition<
         matchesFrameType(sample, frameType)
       );
     });
+    const samples = limit === undefined ? filtered : filtered.slice(0, limit);
 
     ctx.log.info(
       `FrameSelector: ${samples.length}/${trackSamples.length} samples from ${track.trackId}`,

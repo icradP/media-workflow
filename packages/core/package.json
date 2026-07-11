@@ -9,7 +9,8 @@
     "./types": "./src/types/index.ts",
     "./graph": "./src/graph/index.ts",
     "./runtime": "./src/runtime/index.ts",
-    "./resources": "./src/resources/index.ts"
+    "./resources": "./src/resources/index.ts",
+    "./decoder": "./src/decoder/index.ts"
   },
   "scripts": {
     "test": "vitest",

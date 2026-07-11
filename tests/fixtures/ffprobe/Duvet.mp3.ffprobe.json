@@ -135,5 +135,6 @@
   "decodeValidation": {
     "exitCode": 0,
     "warnings": []
-  }
+  },
+  "packetProbe": null
 }

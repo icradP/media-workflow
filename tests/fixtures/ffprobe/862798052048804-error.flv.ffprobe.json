@@ -72,7 +72,15 @@
         "extradataSize": 39,
         "tags": {}
       }
-    ]
+    ],
+    "firstKeyVideoPacket": {
+      "pts": 4133388,
+      "dts": 4133388,
+      "pos": 523,
+      "size": 15846,
+      "sha256": "ea677994942d9f28236068b8974cf4c5d350d1534b5a3be30a9dc064e340e0ed",
+      "hexPrefix": "0000000e6742c029e901405ef2c02c2211a80000000468ce3c8000003dc865888000f47002bffffee1900037ce1a56f61ce5c66fda05764663cc443e8376b30e7308669e0c6dd1a8d1a3928f8374553228410c88f2f59f0ea68fd3d723ecc21812fb1cf4ddefedc771d9d1843022da02655693279a8d224e03d25c2035a0e0988e942191be06aeb2bfce275473f8430b08f05376dcd566f2a9d3f2502188de801dbe6f961b276fd308604db80de38b21ecd41b52179d2d31ec3e0508608d53f24ff9ae9b5218f6410c147206a856ffcd5c218627dc3684e4bfb3f76ab086089ebf9e8eb2776ab4596610c26eeb4957a0feaf35021842b780d6dcbe859ef08625101bf4af6e8a8f0866087bab4487fdc218113eff491a12f599274d1f086022ff812d8418369a6bb6c3f4f08604bac768fe9fcaa49dcac2184cc0b57ecbf3756508610a80b965beb36ede6a0430918a896fbf65fe10c20c513d4bece8c6f9d4d6dc9a10c21cf7ca76863bdddbfe10c389b4551fb7a7cbade10c34034da7a3b2f65493086158008a3ffe9e10c22d0f07a761e451edf4c218693a518de3ef6ff84309f917f65bf765c2184fc0eb3a3dafd1cd508636104adbd9cf5f1b37a7b708604eebbd6edb6dd3938ea0d337c218226434f8e4fddff6e10c275dc779232c2fedfffff76d1de26e16363b958a368b82f870863b34696c9b463c8b8793fc219a38"
+    }
   },
   "probe": {
     "exitCode": 0,
@@ -213,5 +221,9 @@
       "[null @ <ptr>] Application provided invalid, non monotonically increasing dts to muxer in stream 1: 88 >= 88",
       "[null @ <ptr>] Application provided invalid, non monotonically increasing dts to muxer in stream 1: 128 >= 128"
     ]
+  },
+  "packetProbe": {
+    "exitCode": 0,
+    "warnings": []
   }
 }

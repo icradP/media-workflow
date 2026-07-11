@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "name": "FFprobe Media Overview",
+  "description": "Validate container, tracks, samples, and raw bytes against FFprobe.",
+  "nodes": [
+    { "id": "file", "type": "file_loader", "position": [80, 160] },
+    { "id": "analyze", "type": "auto_analyze", "position": [360, 160] },
+    { "id": "overview", "type": "stream_overview", "position": [680, 40] },
+    { "id": "frames", "type": "frame_table", "position": [680, 260] },
+    {
+      "id": "raw-hex",
+      "type": "hex_view",
+      "position": [360, 420],
+      "params": { "offset": 0, "length": 256 }
+    }
+  ],
+  "edges": [
+    {
+      "id": "file-analyze",
+      "sourceNodeId": "file",
+      "sourceOutput": "source",
+      "targetNodeId": "analyze",
+      "targetInput": "source"
+    },
+    {
+      "id": "file-hex",
+      "sourceNodeId": "file",
+      "sourceOutput": "source",
+      "targetNodeId": "raw-hex",
+      "targetInput": "bytes"
+    },
+    {
+      "id": "analyze-overview",
+      "sourceNodeId": "analyze",
+      "sourceOutput": "asset",
+      "targetNodeId": "overview",
+      "targetInput": "asset"
+    },
+    {
+      "id": "analyze-frames",
+      "sourceNodeId": "analyze",
+      "sourceOutput": "asset",
+      "targetNodeId": "frames",
+      "targetInput": "asset"
+    }
+  ]
+}

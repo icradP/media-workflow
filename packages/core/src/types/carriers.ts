@@ -96,6 +96,7 @@ interface MediaTrackBase {
   codec: string;
   codecFamily: CodecFamily;
   codecConfig: Uint8Array | null;
+  decoderConfig?: DecoderConfig;
   timeBase?: MediaTimeBase;
   durationUs?: number;
   bitrate?: number;
@@ -141,6 +142,8 @@ export interface MediaSample {
   size: number;
   isKey: boolean;
   pictureType?: string;
+  /** Zero-copy view of the encoded/container bytes when available. */
+  data?: Uint8Array;
   metadata: Record<string, unknown>;
 }
 
@@ -155,6 +158,154 @@ export interface MediaAsset {
   analyzedAt: string;
   analysisDurationMs: number;
 }
+
+// ─── decode / encode pipeline ───
+
+export type BitstreamFormat =
+  | 'avcc'
+  | 'annexb'
+  | 'aac_raw'
+  | 'adts'
+  | 'g711_alaw'
+  | 'g711_ulaw'
+  | 'mp3'
+  | 'unknown';
+
+export interface DecoderConfig {
+  codec: string;
+  codecFamily: CodecFamily;
+  description?: Uint8Array;
+  bitstreamFormat: BitstreamFormat;
+  codedWidth?: number;
+  codedHeight?: number;
+  sampleRate?: number;
+  channels?: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface EncodedPacket {
+  packetId: string;
+  sourceSampleId: string;
+  trackId: string;
+  codecFamily: CodecFamily;
+  bitstreamFormat: BitstreamFormat;
+  data: Uint8Array;
+  ptsUs: number;
+  dtsUs: number;
+  durationUs?: number;
+  isKey: boolean;
+  metadata: Record<string, unknown>;
+}
+
+export interface VideoDecodeRequest {
+  requestId: string;
+  track: VideoMediaTrack;
+  decoderConfig: DecoderConfig;
+  decodePackets: EncodedPacket[];
+  targetSampleIds: string[];
+  outputFormat: DecodedVideoPixelFormat;
+  diagnostics: MediaDiagnostic[];
+}
+
+export interface AudioDecodeRequest {
+  requestId: string;
+  track: AudioMediaTrack;
+  decoderConfig: DecoderConfig;
+  decodePackets: EncodedPacket[];
+  rangeStartUs: number;
+  rangeEndUs: number;
+  diagnostics: MediaDiagnostic[];
+}
+
+export type DecodedVideoPixelFormat = 'I420' | 'NV12' | 'RGBA8' | 'BGRA8';
+
+export interface DecodedVideoFrame {
+  frameId: string;
+  sourceSampleId: string;
+  ptsUs: number;
+  durationUs?: number;
+  codedWidth: number;
+  codedHeight: number;
+  displayWidth: number;
+  displayHeight: number;
+  format: DecodedVideoPixelFormat;
+  planes: Uint8Array[];
+  strides: number[];
+  colorSpace?: {
+    primaries?: string;
+    transfer?: string;
+    matrix?: string;
+    fullRange?: boolean;
+  };
+  metadata: Record<string, unknown>;
+}
+
+export interface DecodedVideoFrameSet {
+  requestId: string;
+  backend: DecoderBackendInfo;
+  frames: DecodedVideoFrame[];
+  diagnostics: MediaDiagnostic[];
+}
+
+export interface PcmAudioClip {
+  clipId: string;
+  sourceTrackId: string;
+  ptsUs: number;
+  durationUs: number;
+  sampleRate: number;
+  channels: number;
+  sampleCount: number;
+  format: 'f32-planar';
+  planes: Float32Array[];
+  channelLayout?: string;
+  backend: DecoderBackendInfo;
+  diagnostics: MediaDiagnostic[];
+}
+
+export interface EncodedTrack {
+  trackId: string;
+  kind: 'video' | 'audio';
+  codec: string;
+  codecFamily: CodecFamily;
+  decoderConfig: DecoderConfig;
+  packets: EncodedPacket[];
+  metadata: Record<string, unknown>;
+}
+
+export interface MediaFile {
+  fileName: string;
+  mimeType: string;
+  extension: string;
+  data: Uint8Array;
+  metadata: Record<string, unknown>;
+}
+
+export interface DecoderBackendInfo {
+  id: string;
+  version: string;
+  api: 'webcodecs' | 'software' | 'wasm' | 'mock';
+  codecFamilies: CodecFamily[];
+  inputFormats: BitstreamFormat[];
+  outputFormats: Array<DecodedVideoPixelFormat | 'f32-planar'>;
+  hardwareAcceleration?: 'hardware' | 'software' | 'unknown';
+}
+
+/** Values that expose deterministic raw bytes for inspection tools. */
+export type ByteData =
+  | Uint8Array
+  | BufferData
+  | MediaSource
+  | MediaAsset
+  | MediaSample[]
+  | CompressedFrame
+  | VideoFrameData
+  | DecodedVideoFrame
+  | AudioBufferData
+  | NalUnitData
+  | SeiPayloadData
+  | EncodedPacket
+  | EncodedTrack
+  | MediaFile;
 
 // ─── media ───
 
@@ -253,6 +404,8 @@ export interface FrameInfo {
   frameNum?: number;
   /** 原始字节视图 (通常从 buffer 切片得来，可选) */
   rawData?: Uint8Array;
+  dataOrigin?: 'source_slice' | 'demuxed_payload';
+  metadata?: Record<string, unknown>;
 }
 
 // ─── compressed ───

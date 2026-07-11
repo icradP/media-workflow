@@ -15,10 +15,16 @@ describe('LiteGraph workflow adapter', () => {
     const fileNode = LiteGraph.createNode('media/file_loader');
     const detectNode = LiteGraph.createNode('media/auto_analyze');
     const streamNode = LiteGraph.createNode('media/stream_overview');
+    const hexNode = LiteGraph.createNode('media/hex_view');
+    const frameSelectorNode = LiteGraph.createNode('media/frame_selector');
+    const frameHexNode = LiteGraph.createNode('media/hex_view');
 
     graph.add(fileNode);
     graph.add(detectNode);
     graph.add(streamNode);
+    graph.add(hexNode);
+    graph.add(frameSelectorNode);
+    graph.add(frameHexNode);
 
     const fileWidget = (fileNode as unknown as {
       widgets: Array<{ name: string; callback: () => void }>;
@@ -31,8 +37,11 @@ describe('LiteGraph workflow adapter', () => {
     expect(detectNode.inputs[0]?.type).toBe('media_source');
     expect(detectNode.outputs[0]?.type).toBe('media_asset');
     expect(streamNode.inputs[0]?.type).toBe('media_asset');
+    expect(String(hexNode.inputs[0]?.type)).toContain('media_source');
     expect(fileNode.connect(0, detectNode, 0)).not.toBeNull();
     expect(detectNode.connect(0, streamNode, 0)).not.toBeNull();
+    expect(fileNode.connect(0, hexNode, 0)).not.toBeNull();
+    expect(frameSelectorNode.connect(0, frameHexNode, 0)).not.toBeNull();
 
     const extracted = extractWorkflowFromLGraph(graph);
 
@@ -40,6 +49,9 @@ describe('LiteGraph workflow adapter', () => {
       'file_loader',
       'auto_analyze',
       'stream_overview',
+      'hex_view',
+      'frame_selector',
+      'hex_view',
     ]);
     expect(extracted.graph.edges).toMatchObject([
       {
@@ -53,6 +65,18 @@ describe('LiteGraph workflow adapter', () => {
         sourceOutput: 'asset',
         targetNodeId: String(streamNode.id),
         targetInput: 'asset',
+      },
+      {
+        sourceNodeId: String(fileNode.id),
+        sourceOutput: 'source',
+        targetNodeId: String(hexNode.id),
+        targetInput: 'bytes',
+      },
+      {
+        sourceNodeId: String(frameSelectorNode.id),
+        sourceOutput: 'samples',
+        targetNodeId: String(frameHexNode.id),
+        targetInput: 'bytes',
       },
     ]);
   });

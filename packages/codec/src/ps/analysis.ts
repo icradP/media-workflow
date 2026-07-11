@@ -123,6 +123,8 @@ export function parseMpegPsForAnalysis(fileBytes: Uint8Array): MediaAnalysisResu
             offset: nextPes,
             size: end - nextPes,
             isKey: false,
+            rawData: pes.esData,
+            dataOrigin: 'demuxed_payload',
           });
         }
         offset = end;

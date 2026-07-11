@@ -17,6 +17,8 @@ const renderers = new Map<string, NodeRenderer>([
   ['frame_table', renderSampleTableEvent],
   ['frame_selector', renderSampleTableEvent],
   ['hex_view', renderHexEvent],
+  ['yuv_preview', renderYuvPreviewEvent],
+  ['file_export', renderFileExportEvent],
 ]);
 
 function viewportEl(): HTMLElement | null {
@@ -103,6 +105,122 @@ function renderHexEvent(event: NodeExecutionEvent, element: HTMLElement): void {
   } catch {
     element.innerHTML = `<pre class="viewport-hex">${escapeHtml(raw)}</pre>`;
   }
+}
+
+function renderYuvPreviewEvent(event: NodeExecutionEvent, element: HTMLElement): void {
+  const raw = event.outputs.preview;
+  if (typeof raw !== 'string') return;
+  try {
+    const preview = JSON.parse(raw) as {
+      sourceSampleId: string;
+      ptsUs: number;
+      displayWidth: number;
+      displayHeight: number;
+      format: string;
+      byteLength: number;
+    };
+    const canvasId = `yuv-canvas-${event.nodeId}`;
+    element.innerHTML = `
+      <h4 class="viewport-title">YUV Preview</h4>
+      <dl class="viewport-dl">
+        <div><dt>Sample</dt><dd>${escapeHtml(preview.sourceSampleId)}</dd></div>
+        <div><dt>PTS</dt><dd>${formatTimestamp(preview.ptsUs)}</dd></div>
+        <div><dt>Size</dt><dd>${preview.displayWidth}×${preview.displayHeight}</dd></div>
+        <div><dt>Format</dt><dd>${escapeHtml(preview.format)}</dd></div>
+        <div><dt>Bytes</dt><dd>${preview.byteLength}</dd></div>
+      </dl>
+      <canvas id="${canvasId}" class="viewport-canvas" width="${preview.displayWidth}" height="${preview.displayHeight}"></canvas>
+      <p class="viewport-note">Canvas rendering uses the decoded frame from the upstream decoder output.</p>
+    `;
+    const frame = event.inputs.frame as {
+      format?: string;
+      displayWidth?: number;
+      displayHeight?: number;
+      planes?: Uint8Array[];
+      strides?: number[];
+    } | undefined;
+    if (frame?.planes && frame.displayWidth && frame.displayHeight) {
+      renderI420ToCanvas(
+        document.getElementById(canvasId) as HTMLCanvasElement | null,
+        frame.planes,
+        frame.displayWidth,
+        frame.displayHeight,
+        frame.strides?.[0] ?? frame.displayWidth,
+      );
+    }
+  } catch {
+    element.innerHTML = `<pre class="viewport-hex">${escapeHtml(raw)}</pre>`;
+  }
+}
+
+function renderFileExportEvent(event: NodeExecutionEvent, element: HTMLElement): void {
+  const raw = event.outputs.download;
+  if (typeof raw !== 'string') return;
+  try {
+    const payload = JSON.parse(raw) as {
+      fileName: string;
+      mimeType: string;
+      byteLength: number;
+    };
+    const file = event.inputs.file as { data?: Uint8Array } | undefined;
+    const blob = file?.data
+      ? new Blob([file.data.slice()], { type: payload.mimeType })
+      : null;
+    const url = blob ? URL.createObjectURL(blob) : '';
+    element.innerHTML = `
+      <h4 class="viewport-title">File Export</h4>
+      <dl class="viewport-dl">
+        <div><dt>File</dt><dd>${escapeHtml(payload.fileName)}</dd></div>
+        <div><dt>MIME</dt><dd>${escapeHtml(payload.mimeType)}</dd></div>
+        <div><dt>Bytes</dt><dd>${payload.byteLength}</dd></div>
+      </dl>
+      ${url
+        ? `<a class="viewport-link" href="${url}" download="${escapeHtml(payload.fileName)}">Download ${escapeHtml(payload.fileName)}</a>`
+        : '<p class="viewport-note">File bytes are not available in this view.</p>'}
+    `;
+  } catch {
+    element.innerHTML = `<pre class="viewport-hex">${escapeHtml(raw)}</pre>`;
+  }
+}
+
+function renderI420ToCanvas(
+  canvas: HTMLCanvasElement | null,
+  planes: Uint8Array[],
+  width: number,
+  height: number,
+  yStride: number,
+): void {
+  if (!canvas) return;
+  const context = canvas.getContext('2d');
+  if (!context) return;
+  const [yPlane, uPlane, vPlane] = planes;
+  if (!yPlane || !uPlane || !vPlane) return;
+  const image = context.createImageData(width, height);
+  const rgba = image.data;
+  const uvWidth = Math.ceil(width / 2);
+  for (let row = 0; row < height; row++) {
+    for (let col = 0; col < width; col++) {
+      const y = yPlane[row * yStride + col]!;
+      const u = uPlane[Math.floor(row / 2) * uvWidth + Math.floor(col / 2)]!;
+      const v = vPlane[Math.floor(row / 2) * uvWidth + Math.floor(col / 2)]!;
+      const c = y - 16;
+      const d = u - 128;
+      const e = v - 128;
+      const r = clampByte((298 * c + 409 * e + 128) >> 8);
+      const g = clampByte((298 * c - 100 * d - 208 * e + 128) >> 8);
+      const b = clampByte((298 * c + 516 * d + 128) >> 8);
+      const index = (row * width + col) * 4;
+      rgba[index] = r;
+      rgba[index + 1] = g;
+      rgba[index + 2] = b;
+      rgba[index + 3] = 255;
+    }
+  }
+  context.putImageData(image, 0, 0);
+}
+
+function clampByte(value: number): number {
+  return Math.max(0, Math.min(255, value));
 }
 
 function renderAssetSummary(

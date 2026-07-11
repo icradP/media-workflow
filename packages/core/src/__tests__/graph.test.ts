@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { topologicalSort, topologicalLevels, hasCycle, affectedSubgraph } from '../graph/topo';
 import type { WorkflowGraph } from '../graph/graph';
 import type { NodeDefinition } from '../types/node';
+import { arePinTypesCompatible } from '../graph/edge';
 
 function makeMockNode(id: string): NodeDefinition {
   return {
@@ -102,5 +103,26 @@ describe('affectedSubgraph', () => {
     const graph = makeGraph([['A', 'B']]);
     const affected = affectedSubgraph(graph, new Set(['B']));
     expect(new Set(affected)).toEqual(new Set(['B']));
+  });
+});
+
+describe('byte-producing pin compatibility', () => {
+  it.each([
+    'buffer',
+    'media_source',
+    'media_asset',
+    'media_samples',
+    'compressed',
+    'video_frame',
+    'audio_buffer',
+    'nal_units',
+    'sei_payload',
+  ] as const)('connects %s to byte_data', sourceType => {
+    expect(arePinTypesCompatible(sourceType, 'byte_data')).toBe(true);
+  });
+
+  it('rejects values without a byte representation', () => {
+    expect(arePinTypesCompatible('media_track', 'byte_data')).toBe(false);
+    expect(arePinTypesCompatible('number', 'byte_data')).toBe(false);
   });
 });

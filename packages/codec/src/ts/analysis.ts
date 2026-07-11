@@ -12,6 +12,7 @@ import { parseH264SpsNaluPayload } from '../h264/sps.js';
 import { parseHevcSpsNaluPayload } from '../h265/sps.js';
 import { splitAnnexBNalus } from '../nalu/annexb.js';
 import { pictureTypeFromNalType } from '../nalu/picture.js';
+import { buildAvcCFromNalus } from '../packet/avcc.js';
 
 // ─── Constants ───
 
@@ -24,10 +25,6 @@ const STREAM_TYPE_NAMES: Record<number, string> = {
   0x10: 'MPEG-4 Video', 0x11: 'AAC (LATM)', 0x1b: 'H.264 (AVC)',
   0x1c: 'AAC', 0x24: 'HEVC (H.265)', 0x42: 'AVS3',
 };
-
-function streamTypeName(t: number): string {
-  return STREAM_TYPE_NAMES[t] ?? `Unknown (0x${t.toString(16)})`;
-}
 
 function parseAdtsConfig(data: Uint8Array): Record<string, unknown> | null {
   const sampleRates = [
@@ -51,6 +48,45 @@ function parseAdtsConfig(data: Uint8Array): Record<string, unknown> | null {
     };
   }
   return null;
+}
+
+function buildAscFromAdts(data: Uint8Array): Uint8Array | null {
+  for (let offset = 0; offset + 7 <= Math.min(data.length, 256); offset++) {
+    if (data[offset] !== 0xff || (data[offset + 1]! & 0xf6) !== 0xf0) continue;
+    const profile = ((data[offset + 2]! >> 6) & 0x03) + 1;
+    const sampleRateIndex = (data[offset + 2]! >> 2) & 0x0f;
+    const channels =
+      ((data[offset + 2]! & 0x01) << 2) |
+      ((data[offset + 3]! >> 6) & 0x03);
+    const asc = new Uint8Array(2);
+    asc[0] = ((profile & 0x1f) << 3) | ((sampleRateIndex & 0x0e) >> 1);
+    asc[1] = ((sampleRateIndex & 0x01) << 7) | ((channels & 0x0f) << 3);
+    return asc;
+  }
+  return null;
+}
+
+function streamTypeName(t: number): string {
+  return STREAM_TYPE_NAMES[t] ?? `Unknown (0x${t.toString(16)})`;
+}
+
+function inspectVideoAccessUnit(
+  data: Uint8Array,
+  codecFamily: 'h264' | 'h265',
+): { isKey: boolean; isIdr: boolean; pictureType?: string } {
+  for (const nalu of splitAnnexBNalus(data)) {
+    if (nalu.length === 0) continue;
+    const nalType = codecFamily === 'h264'
+      ? nalu[0]! & 0x1f
+      : (nalu[0]! & 0x7e) >> 1;
+    const pictureType = pictureTypeFromNalType(nalType, codecFamily);
+    if (!pictureType) continue;
+    const isIdr = codecFamily === 'h264'
+      ? nalType === 5
+      : nalType >= 16 && nalType <= 21;
+    return { isKey: pictureType === 'I', isIdr, pictureType };
+  }
+  return { isKey: false, isIdr: false };
 }
 
 // ─── TS Packet ───
@@ -208,10 +244,10 @@ class PesAssembler {
     }
     if (packet.payloadUnitStart) {
       this.startNew(packet);
-    } else if (this.expectedLen > 0) {
+    } else if (this.buffer.length > 0) {
       this.buffer.push(packet.payload);
       this.totalLen += packet.payload.length;
-      if (this.totalLen >= this.expectedLen || this.expectedLen === 0) {
+      if (this.expectedLen > 0 && this.totalLen >= this.expectedLen) {
         return this.flush();
       }
     }
@@ -233,7 +269,7 @@ class PesAssembler {
     if (prefix !== 1) return; // 0x000001
     const streamId = reader.readBits(8);
     const pesLen = reader.readBits(16);
-    this.expectedLen = pesLen > 0 ? pesLen : 0;
+    this.expectedLen = 0;
 
     // Skip PES header flags
     if (payload.length < 9) { this.buffer.push(payload); this.totalLen = payload.length; return; }
@@ -251,6 +287,7 @@ class PesAssembler {
     reader.readBits(1); // PES_CRC_flag
     reader.readBits(1); // PES_extension_flag
     const headerLen = reader.readBits(8);
+    this.expectedLen = pesLen > 0 ? Math.max(0, pesLen - 3 - headerLen) : 0;
 
     // PTS/DTS
     const headerEnd = 9 + headerLen;
@@ -291,14 +328,21 @@ class PesAssembler {
 
   private flush(): PesPacket | null {
     if (this.buffer.length === 0) return null;
-    const total = new Uint8Array(this.totalLen);
+    const dataLength = this.expectedLen > 0
+      ? Math.min(this.expectedLen, this.totalLen)
+      : this.totalLen;
+    const total = new Uint8Array(dataLength);
     let off = 0;
     for (const chunk of this.buffer) {
-      total.set(chunk, off);
-      off += chunk.length;
+      const remaining = dataLength - off;
+      if (remaining <= 0) break;
+      const slice = chunk.subarray(0, remaining);
+      total.set(slice, off);
+      off += slice.length;
     }
     this.buffer = [];
     this.totalLen = 0;
+    this.expectedLen = 0;
     return {
       streamId: 0, // will be set by caller
       pts: this.pts,
@@ -353,6 +397,9 @@ export function parseMpegTsForAnalysis(fileBytes: Uint8Array): MediaAnalysisResu
   const streams: StreamInfo[] = [];
   let spsInfo: H264SpsResult | Record<string, unknown> | null = null;
   let audioConfig: Record<string, unknown> | null = null;
+  let spsNalu: Uint8Array | null = null;
+  let ppsNalu: Uint8Array | null = null;
+  let aacAsc: Uint8Array | null = null;
   let frameIdx = 0;
 
   for (const pkt of packets) {
@@ -375,12 +422,20 @@ export function parseMpegTsForAnalysis(fileBytes: Uint8Array): MediaAnalysisResu
 
       // Try SPS/AAC config extraction from first PES
       if (codec?.includes('H.264') || codec?.includes('AVC')) {
-        if (!spsInfo && pes.data.length > 4) {
+        if (pes.data.length > 4) {
           const nalus = splitAnnexBNalus(pes.data);
           for (const nalu of nalus) {
-            if (nalu.length > 1 && (nalu[0]! & 0x1f) === 7) {
-              const sps = parseH264SpsNaluPayload(nalu);
-              if (sps._actualWidth) spsInfo = sps;
+            if (nalu.length > 1) {
+              const nalType = nalu[0]! & 0x1f;
+              if (nalType === 7 && !spsInfo) {
+                const sps = parseH264SpsNaluPayload(nalu);
+                if (sps._actualWidth) {
+                  spsInfo = sps;
+                  spsNalu = nalu.slice();
+                }
+              } else if (nalType === 8 && !ppsNalu) {
+                ppsNalu = nalu.slice();
+              }
             }
           }
         }
@@ -396,6 +451,9 @@ export function parseMpegTsForAnalysis(fileBytes: Uint8Array): MediaAnalysisResu
         }
       } else if (codec?.includes('AAC') && !audioConfig) {
         audioConfig = parseAdtsConfig(pes.data);
+        if (audioConfig && pes.data.byteLength >= 7) {
+          aacAsc = buildAscFromAdts(pes.data);
+        }
       }
 
       pesFrames.push({ pid, pts: pes.pts, data: pes.data });
@@ -432,7 +490,9 @@ export function parseMpegTsForAnalysis(fileBytes: Uint8Array): MediaAnalysisResu
       kind: isVideo ? 'video' : 'audio',
       codec: isVideo ? (isHevc ? 'H.265' : 'H.264') : 'AAC',
       codecFamily: isVideo ? (isHevc ? 'h265' : 'h264') : 'aac',
-      codecConfig: null,
+      codecConfig: isVideo
+        ? (spsNalu && ppsNalu ? buildAvcCFromNalus(spsNalu, ppsNalu) : null)
+        : aacAsc,
       durationMs,
       sampleCount: trackFrames.length,
       timeBase: { numerator: 1, denominator: 90_000 },
@@ -473,6 +533,12 @@ export function parseMpegTsForAnalysis(fileBytes: Uint8Array): MediaAnalysisResu
       })
       .findIndex(stream => stream.pid === pes.pid);
     if (streamIndex < 0) return [];
+    const accessUnit = isVideo
+      ? inspectVideoAccessUnit(
+          pes.data,
+          descriptor.streamType === 0x24 ? 'h265' : 'h264',
+        )
+      : { isKey: true, isIdr: false, pictureType: undefined };
 
     return [{
       index: i,
@@ -482,7 +548,11 @@ export function parseMpegTsForAnalysis(fileBytes: Uint8Array): MediaAnalysisResu
       pts: pes.pts ?? i * 40,
       offset: 0,
       size: pes.data.length,
-      isKey: false,
+      isKey: accessUnit.isKey,
+      isIdr: accessUnit.isIdr,
+      pictureType: accessUnit.pictureType,
+      rawData: pes.data,
+      dataOrigin: 'demuxed_payload',
     }];
   });
 

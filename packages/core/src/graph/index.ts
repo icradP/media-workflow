@@ -1,5 +1,9 @@
 export type { Edge } from './edge';
-export { arePinTypesCompatible, validateEdge } from './edge';
+export {
+  BYTE_PRODUCING_PIN_TYPES,
+  arePinTypesCompatible,
+  validateEdge,
+} from './edge';
 export type { GraphValidationIssue } from './validate';
 export { validateWorkflowGraph, assertValidWorkflowGraph } from './validate';
 export type {

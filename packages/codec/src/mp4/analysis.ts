@@ -125,13 +125,13 @@ function extractAvc1Info(stsdData: Uint8Array): Record<string, unknown> | null {
           if (spsOff + spsLen <= avcCData.length) {
             const sps = parseH264SpsNaluPayload(avcCData.slice(spsOff, spsOff + spsLen));
             if (sps._actualWidth) {
-              return { ...sps, entryType, width: sps._actualWidth, height: sps._actualHeight };
+              return { ...sps, entryType, width: sps._actualWidth, height: sps._actualHeight, avcC: avcCData.slice() };
             }
             spsOff += spsLen;
           }
         }
       }
-      return { entryType, width, height };
+      return { entryType, width, height, avcC: avcCData.slice() };
     }
     if (boxType === 'hvcC') {
       const hvcCData = new Uint8Array(stsdData.buffer, stsdData.byteOffset + off + 8, Math.min(boxLen - 8, stsdData.length - off - 8));
@@ -193,9 +193,11 @@ function extractMp4aInfo(stsdData: Uint8Array): Record<string, unknown> | null {
             descriptor.length >= 2 &&
             descriptor.dataOffset + descriptor.length <= esdsData.length
           ) {
-            return parseAudioSpecificConfig(
-              esdsData.slice(descriptor.dataOffset, descriptor.dataOffset + descriptor.length),
-            );
+            const asc = esdsData.slice(descriptor.dataOffset, descriptor.dataOffset + descriptor.length);
+            return {
+              ...parseAudioSpecificConfig(asc),
+              asc,
+            };
           }
         }
       }
@@ -489,7 +491,9 @@ export function parseIsoBmffForAnalysis(fileBytes: Uint8Array): MediaAnalysisRes
       kind: isVideo ? 'video' : 'audio',
       codec: isVideo ? (isHevc ? 'H.265' : 'H.264') : 'AAC',
       codecFamily: isVideo ? (isHevc ? 'h265' : 'h264') : 'aac',
-      codecConfig: null,
+      codecConfig: isVideo
+        ? (codecInfo?.avcC as Uint8Array | undefined) ?? null
+        : (codecInfo?.asc as Uint8Array | undefined) ?? null,
       durationMs: identity.durationMs,
       sampleCount: sampleSizes.length,
       timeBase: identity.timeScale

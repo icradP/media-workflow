@@ -43,6 +43,8 @@ export function parseFlvFileForAnalysis(fileBytes: Uint8Array): MediaAnalysisRes
   let maxTs = 0;
   let spsInfo: H264SpsResult | Record<string, unknown> | null = null;
   let audioConfig: Record<string, unknown> | null = null;
+  let videoCodecConfig: Uint8Array | null = null;
+  let audioCodecConfig: Uint8Array | null = null;
   let frameIndex = 0;
 
   while (offset + 11 <= fileBytes.length) {
@@ -55,23 +57,38 @@ export function parseFlvFileForAnalysis(fileBytes: Uint8Array): MediaAnalysisRes
     if (tag.tagType === 9) {
       hasVideo = true;
       if (tag.spsInfo && !spsInfo) spsInfo = tag.spsInfo;
+      if (tag.avcSequenceHeader && !videoCodecConfig) {
+        videoCodecConfig = tag.avcSequenceHeader;
+      }
     } else if (tag.tagType === 8) {
       hasAudio = true;
       if (tag.audioConfig && !audioConfig) audioConfig = tag.audioConfig;
+      if (tag.aacSequenceHeader && !audioCodecConfig) {
+        audioCodecConfig = tag.aacSequenceHeader;
+      }
     }
 
     if (tag.tagType === 9 || tag.tagType === 8) {
-      frames.push({
-        index: frameIndex++,
-        streamIndex: tag.tagType === 9 ? 0 : 1,
-        kind: tag.tagType === 9 ? 'video' : 'audio',
-        dts: ts,
-        pts: ts,
-        offset: tag.offset,
-        size: tag.dataSize,
-        isKey: tag.isKeyframe ?? false,
-        pictureType: tag.pictureType,
-      });
+      const payload = extractMediaPayload(fileBytes, tag);
+      if (payload) {
+        frames.push({
+          index: frameIndex++,
+          streamIndex: tag.tagType === 9 ? 0 : 1,
+          kind: tag.tagType === 9 ? 'video' : 'audio',
+          dts: ts,
+          pts: payload.pts,
+          offset: payload.offset,
+          size: payload.data.byteLength,
+          isKey: tag.isKeyframe ?? false,
+          pictureType: tag.pictureType,
+          rawData: payload.data,
+          dataOrigin: 'demuxed_payload',
+          metadata: {
+            flvAvcPacketType: tag.avcPacketType,
+            flvSoundFormat: tag.soundFormat,
+          },
+        });
+      }
     }
 
     offset += 11 + tag.dataSize + 4;
@@ -85,7 +102,7 @@ export function parseFlvFileForAnalysis(fileBytes: Uint8Array): MediaAnalysisRes
       index: 0, sourceId: 'video', kind: 'video',
       codec: spsInfo ? 'H.264' : 'H.264',
       codecFamily: 'h264',
-      codecConfig: null,
+      codecConfig: videoCodecConfig,
       durationMs: maxTs,
       sampleCount: frames.filter(frame => frame.kind === 'video').length,
       timeBase: { numerator: 1, denominator: 1_000 },
@@ -103,7 +120,7 @@ export function parseFlvFileForAnalysis(fileBytes: Uint8Array): MediaAnalysisRes
   if (hasAudio) {
     streams.push({
       index: hasVideo ? 1 : 0, sourceId: 'audio', kind: 'audio',
-      codec: 'AAC', codecFamily: 'aac', codecConfig: null,
+      codec: 'AAC', codecFamily: 'aac', codecConfig: audioCodecConfig,
       durationMs: maxTs,
       sampleCount: frames.filter(frame => frame.kind === 'audio').length,
       timeBase: { numerator: 1, denominator: 1_000 },
@@ -128,4 +145,58 @@ export function parseFlvFileForAnalysis(fileBytes: Uint8Array): MediaAnalysisRes
     formatSpecific: { header, maxTimestamp: maxTs, tagCount: frames.length },
     fileSize: fileBytes.byteLength,
   };
+}
+
+function extractMediaPayload(
+  fileBytes: Uint8Array,
+  tag: ParsedFlvTag,
+): { offset: number; pts: number; data: Uint8Array } | null {
+  const bodyOffset = tag.offset + 11;
+  const bodyEnd = bodyOffset + tag.dataSize;
+  if (bodyEnd > fileBytes.byteLength || tag.dataSize <= 0) return null;
+  const body = fileBytes.subarray(bodyOffset, bodyEnd);
+
+  if (tag.tagType === 9) {
+    if (body.length < 1) return null;
+    const codecId = body[0]! & 0x0f;
+    if (codecId === 7 || codecId === 12) {
+      if (body.length <= 5 || body[1] !== 1) return null;
+      const compositionTime = signedInt24(body[2]!, body[3]!, body[4]!);
+      return {
+        offset: bodyOffset + 5,
+        pts: tag.timestampFull + compositionTime,
+        data: body.subarray(5),
+      };
+    }
+    return {
+      offset: bodyOffset + 1,
+      pts: tag.timestampFull,
+      data: body.subarray(1),
+    };
+  }
+
+  if (tag.tagType === 8) {
+    if (body.length < 1) return null;
+    const soundFormat = (body[0]! >> 4) & 0x0f;
+    if (soundFormat === 10) {
+      if (body.length <= 2 || body[1] !== 1) return null;
+      return {
+        offset: bodyOffset + 2,
+        pts: tag.timestampFull,
+        data: body.subarray(2),
+      };
+    }
+    return {
+      offset: bodyOffset + 1,
+      pts: tag.timestampFull,
+      data: body.subarray(1),
+    };
+  }
+
+  return null;
+}
+
+function signedInt24(high: number, middle: number, low: number): number {
+  const value = (high << 16) | (middle << 8) | low;
+  return (value & 0x800000) !== 0 ? value - 0x1000000 : value;
 }

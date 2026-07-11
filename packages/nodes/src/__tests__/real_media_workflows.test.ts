@@ -154,7 +154,7 @@ function buildWorkflow(
   ]);
   const edges: WorkflowGraph['edges'] = [
     edge('file-analyze', 'file', 'source', 'analyze', 'source'),
-    edge('file-hex', 'file', 'source', 'hex', 'source'),
+    edge('file-hex', 'file', 'source', 'hex', 'bytes'),
     edge('analyze-overview', 'analyze', 'asset', 'overview', 'asset'),
     edge('analyze-frames', 'analyze', 'asset', 'frames', 'asset'),
   ];
@@ -238,7 +238,7 @@ function assertTrackMatchesBaseline(track: MediaTrack, expected: BaselineStream)
     if (expected.sampleRate !== null) expect(track.sampleRate).toBe(expected.sampleRate);
     if (expected.channels !== null) expect(track.channels).toBe(expected.channels);
   }
-  if (expected.frameCount !== null && track.codecFamily !== 'pcm') {
+  if (expected.frameCount !== null) {
     expect(Math.abs(track.sampleCount - expected.frameCount)).toBeLessThanOrEqual(5);
   }
 }

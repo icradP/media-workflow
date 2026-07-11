@@ -50,6 +50,23 @@ for (const fileName of fileNames) {
   if (parsedProbe.format?.filename) {
     parsedProbe.format.filename = relative(root, inputPath);
   }
+  const expected = summarize(parsedProbe);
+  const packetProbe = expected.streams.some(stream => stream.kind === 'video')
+    ? run('ffprobe', [
+        '-v', 'error',
+        '-select_streams', 'v:0',
+        '-show_packets',
+        '-show_data',
+        '-show_entries', 'packet=pts,dts,pos,size,flags,data',
+        '-of', 'json',
+        inputPath,
+      ])
+    : null;
+  if (packetProbe) {
+    expected.firstKeyVideoPacket = extractFirstKeyVideoPacket(
+      parseProbeJson(packetProbe.stdout, `${fileName} packets`),
+    );
+  }
   const record = {
     schemaVersion: 1,
     generator: {
@@ -61,7 +78,7 @@ for (const fileName of fileNames) {
       size: info.size,
       sha256: createHash('sha256').update(bytes).digest('hex'),
     },
-    expected: summarize(parsedProbe),
+    expected,
     probe: {
       exitCode: probe.status,
       warnings: lines(probe.stderr),
@@ -71,6 +88,9 @@ for (const fileName of fileNames) {
       exitCode: validation.status,
       warnings: lines(validation.stderr),
     },
+    packetProbe: packetProbe
+      ? { exitCode: packetProbe.status, warnings: lines(packetProbe.stderr) }
+      : null,
   };
   const outputPath = join(outputDir, `${basename(fileName)}.ffprobe.json`);
   await writeFile(outputPath, `${JSON.stringify(record, null, 2)}\n`);
@@ -145,6 +165,38 @@ function summarize(probe) {
       tags: stream.tags ?? {},
     })),
   };
+}
+
+function extractFirstKeyVideoPacket(probe) {
+  const packet = (probe.packets ?? []).find(candidate =>
+    String(candidate.flags ?? '').includes('K'),
+  );
+  if (!packet) return null;
+  const data = bytesFromFfprobeDump(String(packet.data ?? ''));
+  return {
+    pts: integer(packet.pts),
+    dts: integer(packet.dts),
+    pos: integer(packet.pos),
+    size: integer(packet.size),
+    sha256: createHash('sha256').update(data).digest('hex'),
+    hexPrefix: Buffer.from(data.subarray(0, 512)).toString('hex'),
+  };
+}
+
+function bytesFromFfprobeDump(dump) {
+  const hex = dump
+    .split(/\r?\n/)
+    .map(line => {
+      const colon = line.indexOf(':');
+      if (colon < 0) return '';
+      return line
+        .slice(colon + 1)
+        .trim()
+        .split(/\s{2,}/, 1)[0]
+        .replace(/\s+/g, '');
+    })
+    .join('');
+  return Uint8Array.from(hex.match(/.{2}/g)?.map(byte => Number.parseInt(byte, 16)) ?? []);
 }
 
 function numeric(value) {
