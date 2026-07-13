@@ -70,4 +70,22 @@ describe('FLV remux verification', () => {
     expect(ffprobe.stdout).toContain('codec_name=h264');
     expect(ffprobe.stdout).toContain('codec_name=aac');
   });
+
+  it('remuxes FLV audio-only selection when ASC is inferred from sample rate', () => {
+    const flvAsset = loadAsset('tests/generated-av.flv');
+    const audioTrack = flvAsset.tracks.find(track => track.kind === 'audio');
+    expect(audioTrack?.codecFamily).toBe('aac');
+
+    const selection = materializeMediaSelection(
+      selectTrack(flvAsset, { kind: 'audio', index: 0 }),
+    );
+    selection.selectedTrack.track = {
+      ...selection.selectedTrack.track,
+      codecConfig: null,
+    };
+
+    const muxed = remuxMediaSelectionsToMp4({ audio: selection });
+    expect(muxed.audioSampleCount).toBeGreaterThan(0);
+    expect(isMp4OrFmp4Signature(muxed.data)).toBe(true);
+  });
 });

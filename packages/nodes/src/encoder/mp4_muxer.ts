@@ -17,7 +17,7 @@ export const mp4MuxerNode: NodeDefinition<
   id: 'mp4_muxer',
   category: 'transform',
   displayName: 'MP4 Muxer',
-  description: 'Remux selected H.264/AAC samples or an analyzed asset into an MP4 file.',
+  description: 'Remux H.264/AAC into MP4. G.711/MP3: use Audio Decode → AAC Encoder first.',
   inputs: {
     video: { type: 'media_selection', label: 'Video Selection', optional: true },
     audio: { type: 'media_selection', label: 'Audio Selection', optional: true },

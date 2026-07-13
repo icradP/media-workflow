@@ -57,6 +57,9 @@ const PARAM_LABELS: Record<string, Record<string, string>> = {
     endTimeSeconds: '结束时间 (秒)',
     bitrate: '码率 (bps)',
   },
+  aac_encoder: {
+    bitrate: '码率 (bps)',
+  },
 };
 
 const TIMELINE_NODE_IDS = new Set(['media_select', 'video_decode', 'audio_decode', 'aac_transcode']);

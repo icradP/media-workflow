@@ -109,10 +109,60 @@ export function buildAscFromAdts(data: Uint8Array): Uint8Array | null {
     const channels =
       ((data[offset + 2]! & 0x01) << 2) |
       ((data[offset + 3]! >> 6) & 0x03);
-    const asc = new Uint8Array(2);
-    asc[0] = ((profile & 0x1f) << 3) | ((sampleRateIndex & 0x0e) >> 1);
-    asc[1] = ((sampleRateIndex & 0x01) << 7) | ((channels & 0x0f) << 3);
-    return asc;
+    return buildAscFromAudioParams({
+      audioObjectType: profile,
+      sampleRateIndex,
+      channels,
+    });
   }
   return null;
+}
+
+export function buildAscFromAudioParams(options: {
+  audioObjectType?: number;
+  sampleRate?: number;
+  sampleRateIndex?: number;
+  channels?: number;
+}): Uint8Array | null {
+  const objectType = Number(options.audioObjectType ?? 2);
+  const channels = Number(options.channels ?? 0);
+  if (channels <= 0) return null;
+
+  let freqIndex = options.sampleRateIndex;
+  if (freqIndex === undefined && options.sampleRate) {
+    freqIndex = AAC_SAMPLING_FREQUENCIES.indexOf(Number(options.sampleRate));
+  }
+  if (freqIndex === undefined || freqIndex < 0 || freqIndex >= 16) return null;
+
+  const asc = new Uint8Array(2);
+  asc[0] = ((objectType & 0x1f) << 3) | ((freqIndex & 0x0e) >> 1);
+  asc[1] = ((freqIndex & 0x01) << 7) | ((channels & 0x0f) << 3);
+  return asc;
+}
+
+export function buildAscFromAudioConfigRecord(
+  config: Record<string, unknown> | null | undefined,
+): Uint8Array | null {
+  if (!config) return null;
+  const objectType = Number(
+    config.audioObjectType ??
+    config.originalAudioObjectType ??
+    config.profile ??
+    2,
+  );
+  const sampleRate = Number(
+    config._samplingFrequency_value ??
+    config.samplingFrequency ??
+    0,
+  );
+  const channels = Number(
+    config._channelConfiguration_value ??
+    config.channels ??
+    0,
+  );
+  return buildAscFromAudioParams({
+    audioObjectType: objectType,
+    sampleRate,
+    channels,
+  });
 }

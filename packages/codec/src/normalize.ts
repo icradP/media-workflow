@@ -14,6 +14,7 @@ import type {
   VideoMediaTrack,
 } from '@media-workflow/core';
 import { buildDecoderConfig } from './packet/config.js';
+import { enrichAssetCodecConfig } from './codec_config/infer.js';
 import { detectContainerFormat } from './detect.js';
 
 const FORMAT_NAMES: Record<DetectedMediaFormat, string> = {
@@ -110,6 +111,13 @@ export function normalizeAnalysis(
     analyzedAt: new Date().toISOString(),
     analysisDurationMs,
   };
+
+  enrichAssetCodecConfig(asset);
+  for (const track of asset.tracks) {
+    if (track.kind === 'video' || track.kind === 'audio') {
+      track.decoderConfig = buildDecoderConfig(track, probe.format);
+    }
+  }
 
   asset.diagnostics.push(...validateMediaAsset(asset));
   return asset;

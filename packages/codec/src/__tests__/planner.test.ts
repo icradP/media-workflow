@@ -190,6 +190,7 @@ describe('audio decode planner', () => {
     });
 
     expect(request.decodePackets).toHaveLength(2);
+    expect(request.decodePackets.every(packet => packet.isKey)).toBe(true);
     expect(request.rangeStartUs).toBe(10_000);
     expect(request.rangeEndUs).toBe(30_000);
   });

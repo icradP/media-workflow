@@ -47,7 +47,10 @@ export const webcodecsAudioDecoderNode: NodeDefinition<
     const channelChunks: Float32Array[][] = [];
     let sampleRate = request.track.sampleRate ?? request.decoderConfig.sampleRate ?? 48_000;
     let channels = request.track.channels ?? request.decoderConfig.channels ?? 2;
-    let ptsUs = request.rangeStartUs;
+    const timestampOrigin = request.decodePackets[0]?.ptsUs ?? 0;
+    const normalizedRangeStartUs = request.rangeStartUs - timestampOrigin;
+    const normalizedRangeEndUs = request.rangeEndUs - timestampOrigin;
+    let ptsUs = normalizedRangeStartUs;
 
     const decoder = new AudioDecoder({
       output: audioData => {
@@ -71,18 +74,33 @@ export const webcodecsAudioDecoderNode: NodeDefinition<
       },
     });
 
-    decoder.configure({
+    const config = {
       codec: request.decoderConfig.codec,
       description: request.decoderConfig.description,
       sampleRate,
       numberOfChannels: channels,
-    });
+    };
+    if (typeof AudioDecoder.isConfigSupported === 'function') {
+      const support = await AudioDecoder.isConfigSupported(config);
+      if (!support.supported) {
+        throw new Error(
+          `WebCodecsAudioDecoder: ${request.decoderConfig.codec} at ${sampleRate} Hz `
+          + `is not supported`,
+        );
+      }
+    }
+    decoder.configure(config);
+
+    const chunkType = request.decoderConfig.codecFamily === 'aac' ||
+      request.decoderConfig.bitstreamFormat === 'aac_raw'
+      ? 'key'
+      : undefined;
 
     for (const packet of request.decodePackets) {
       if (ctx.signal.aborted) break;
       const chunk = new EncodedAudioChunk({
-        type: packet.isKey ? 'key' : 'delta',
-        timestamp: packet.ptsUs,
+        type: chunkType ?? (packet.isKey ? 'key' : 'delta'),
+        timestamp: packet.ptsUs - timestampOrigin,
         duration: packet.durationUs,
         data: packet.data,
       });
@@ -98,14 +116,14 @@ export const webcodecsAudioDecoderNode: NodeDefinition<
       sampleRate,
       channels,
       ptsUs,
-      rangeStartUs: request.rangeStartUs,
-      rangeEndUs: request.rangeEndUs,
+      rangeStartUs: normalizedRangeStartUs,
+      rangeEndUs: normalizedRangeEndUs,
     });
 
     const clip: PcmAudioClip = {
       clipId: `${request.requestId}:pcm`,
       sourceTrackId: request.track.trackId,
-      ptsUs: trimmed.ptsUs,
+      ptsUs: trimmed.ptsUs + timestampOrigin,
       durationUs: trimmed.durationUs,
       sampleRate,
       channels,

@@ -50,9 +50,12 @@ export function planAudioDecodeRequest(options: {
     return sampleEnd > normalizedStart && sampleStart < normalizedEnd;
   });
 
-  const decodePackets = overlapping
-    .map(sample => sampleToEncodedPacket(sample, track, containerFormat))
-    .filter((packet): packet is EncodedPacket => packet !== null);
+  const decodePackets = finalizeAudioDecodePackets(
+    overlapping
+      .map(sample => sampleToEncodedPacket(sample, track, containerFormat))
+      .filter((packet): packet is EncodedPacket => packet !== null),
+    track,
+  );
 
   if (overlapping.length > 0 && decodePackets.length === 0) {
     diagnostics.push({
@@ -71,6 +74,41 @@ export function planAudioDecodeRequest(options: {
     rangeEndUs: normalizedEnd,
     diagnostics,
   };
+}
+
+function finalizeAudioDecodePackets(
+  packets: EncodedPacket[],
+  track: AudioMediaTrack,
+): EncodedPacket[] {
+  if (packets.length === 0) return packets;
+
+  const sorted = [...packets].sort((left, right) =>
+    left.ptsUs - right.ptsUs || left.sourceSampleId.localeCompare(right.sourceSampleId),
+  );
+  const forceKey = track.codecFamily === 'aac';
+  const defaultDurationUs = defaultAacFrameDurationUs(
+    track.sampleRate ?? track.decoderConfig?.sampleRate,
+  );
+
+  return sorted.map((packet, index) => {
+    const next = sorted[index + 1];
+    const durationUs = packet.durationUs && packet.durationUs > 0
+      ? packet.durationUs
+      : next && next.ptsUs > packet.ptsUs
+        ? next.ptsUs - packet.ptsUs
+        : defaultDurationUs;
+
+    return {
+      ...packet,
+      durationUs,
+      isKey: forceKey ? true : packet.isKey,
+    };
+  });
+}
+
+function defaultAacFrameDurationUs(sampleRate?: number): number {
+  const rate = sampleRate && sampleRate > 0 ? sampleRate : 48_000;
+  return Math.round((1024 / rate) * 1_000_000);
 }
 
 export function trimPcmToRange(options: {

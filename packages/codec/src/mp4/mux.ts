@@ -7,7 +7,8 @@ import type {
   VideoMediaTrack,
 } from '@media-workflow/core';
 import { annexBToAvcc } from '../decode/bitstream.js';
-import { inferAudioCodecConfig, inferVideoCodecConfig } from '../codec_config/infer.js';
+import { resolveTrackCodecConfig } from '../codec_config/infer.js';
+import { formatMuxAudioError, formatMuxVideoError } from './capabilities.js';
 import { sampleToEncodedPacket } from '../packet/normalize.js';
 import {
   buildFtyp,
@@ -164,11 +165,7 @@ function buildMuxTrackFromSamples(
     throw new Error(`RemuxMp4: ${expectedKind} selection ${selection.selectionId} is empty`);
   }
   if (!track.codecConfig || track.codecConfig.byteLength === 0) {
-    const muxableMp3 = expectedKind === 'audio' &&
-      isMuxableAudioWithoutCodecConfig(track as AudioMediaTrack);
-    if (!muxableMp3) {
-      throw new Error(`RemuxMp4: ${expectedKind} track ${track.trackId} is missing codec configuration`);
-    }
+    assertMuxableAudioTrack(track as AudioMediaTrack);
   }
 
   return buildMuxTrack(
@@ -195,37 +192,29 @@ function validateSelectionSamples(
     );
   }
   if (!track.codecConfig || track.codecConfig.byteLength === 0) {
-    const muxableMp3 = kind === 'audio' &&
-      isMuxableAudioWithoutCodecConfig(track as AudioMediaTrack);
-    if (!muxableMp3) {
-      throw new Error(`RemuxMp4: ${kind} track ${track.trackId} is missing codec configuration`);
+    if (kind === 'audio') {
+      assertMuxableAudioTrack(track as AudioMediaTrack);
+    } else {
+      assertMuxableVideoTrack(track as VideoMediaTrack);
     }
   }
-}
-
-function resolveTrackCodecConfig(
-  track: MediaTrack,
-  asset: MediaAsset,
-): MediaTrack {
-  if (track.kind === 'video') {
-    const codecConfig = inferVideoCodecConfig(track as VideoMediaTrack, asset.samples);
-    if (codecConfig?.byteLength && !track.codecConfig?.byteLength) {
-      return { ...track, codecConfig };
-    }
-  }
-  if (track.kind === 'audio') {
-    const codecConfig = inferAudioCodecConfig(track as AudioMediaTrack, asset, asset.samples);
-    if (codecConfig?.byteLength && !track.codecConfig?.byteLength) {
-      return { ...track, codecConfig };
-    }
-  }
-  return track;
 }
 
 function isMuxableAudioWithoutCodecConfig(track: AudioMediaTrack): boolean {
   return track.codecFamily === 'mp3' &&
     Number(track.sampleRate) > 0 &&
     Number(track.channels) > 0;
+}
+
+function assertMuxableAudioTrack(track: AudioMediaTrack): void {
+  if (track.codecConfig && track.codecConfig.byteLength > 0) return;
+  if (isMuxableAudioWithoutCodecConfig(track)) return;
+  throw new Error(formatMuxAudioError(track));
+}
+
+function assertMuxableVideoTrack(track: VideoMediaTrack): void {
+  if (track.codecConfig && track.codecConfig.byteLength > 0) return;
+  throw new Error(formatMuxVideoError(track));
 }
 
 function sortedSamples(selection: MediaSelection): MediaSample[] {
@@ -258,8 +247,10 @@ function finalizeMp4(muxTracks: MuxTrack[]): RemuxMp4Result {
       throw new Error(`RemuxMp4: track ${track.track.trackId} has no samples`);
     }
   if (!track.track.codecConfig || track.track.codecConfig.byteLength === 0) {
-    if (!(track.track.kind === 'audio' && isMuxableAudioWithoutCodecConfig(track.track as AudioMediaTrack))) {
-      throw new Error(`RemuxMp4: track ${track.track.trackId} is missing codec configuration`);
+    if (track.track.kind === 'audio') {
+      assertMuxableAudioTrack(track.track as AudioMediaTrack);
+    } else {
+      assertMuxableVideoTrack(track.track as VideoMediaTrack);
     }
   }
   }

@@ -49,6 +49,7 @@ export function parseFlvFileForAnalysis(fileBytes: Uint8Array): MediaAnalysisRes
   let frameIndex = 0;
   let audioSoundFormat: number | undefined;
   let mp3AudioInfo: { sampleRate: number; channels: number } | undefined;
+  let scriptMetadata: Record<string, unknown> | null = null;
 
   while (offset + 11 <= fileBytes.length) {
     const tag = parseFlvTagAt(fileBytes, offset);
@@ -75,6 +76,8 @@ export function parseFlvFileForAnalysis(fileBytes: Uint8Array): MediaAnalysisRes
       if (tag.soundFormat === 2 && !mp3AudioInfo) {
         mp3AudioInfo = inferMp3InfoFromFlvTag(fileBytes, tag);
       }
+    } else if (tag.tagType === 18 && tag.metadata) {
+      scriptMetadata = { ...(scriptMetadata ?? {}), ...tag.metadata };
     }
 
     if (tag.tagType === 9 || tag.tagType === 8) {
@@ -128,10 +131,11 @@ export function parseFlvFileForAnalysis(fileBytes: Uint8Array): MediaAnalysisRes
 
   if (hasAudio) {
     const audioMeta = resolveFlvAudioStreamInfo({
-      soundFormat: audioSoundFormat,
+      soundFormat: audioSoundFormat ?? readScriptAudioCodecId(scriptMetadata),
       audioConfig,
       audioCodecConfig,
       mp3AudioInfo,
+      scriptMetadata,
       maxTs,
       audioSampleCount: frames.filter(frame => frame.kind === 'audio').length,
       hasVideo,
@@ -223,12 +227,14 @@ function resolveFlvAudioStreamInfo(options: {
   audioConfig: Record<string, unknown> | null;
   audioCodecConfig: Uint8Array | null;
   mp3AudioInfo?: { sampleRate: number; channels: number };
+  scriptMetadata?: Record<string, unknown> | null;
   maxTs: number;
   audioSampleCount: number;
   hasVideo: boolean;
 }): StreamInfo {
   const soundFormat = options.soundFormat ?? 10;
   const index = options.hasVideo ? 1 : 0;
+  const scriptAudio = readScriptAudioInfo(options.scriptMetadata);
 
   if (soundFormat === 2 || soundFormat === 14) {
     return {
@@ -242,7 +248,7 @@ function resolveFlvAudioStreamInfo(options: {
       sampleCount: options.audioSampleCount,
       timeBase: { numerator: 1, denominator: 1_000 },
       metadata: { flvSoundFormat: soundFormat },
-      audio: options.mp3AudioInfo,
+      audio: options.mp3AudioInfo ?? scriptAudio,
     };
   }
 
@@ -263,6 +269,16 @@ function resolveFlvAudioStreamInfo(options: {
     };
   }
 
+  const parsedAudio = options.audioConfig &&
+    Number(options.audioConfig._samplingFrequency_value) > 0 &&
+    Number(options.audioConfig._channelConfiguration_value) > 0
+    ? {
+        sampleRate: Number(options.audioConfig._samplingFrequency_value),
+        channels: Number(options.audioConfig._channelConfiguration_value),
+        profile: String(options.audioConfig.audioObjectTypeName ?? ''),
+      }
+    : scriptAudio;
+
   return {
     index,
     sourceId: 'audio',
@@ -273,15 +289,46 @@ function resolveFlvAudioStreamInfo(options: {
     durationMs: options.maxTs,
     sampleCount: options.audioSampleCount,
     timeBase: { numerator: 1, denominator: 1_000 },
-    metadata: { flvSoundFormat: soundFormat },
-    audio: options.audioConfig &&
-      Number(options.audioConfig._samplingFrequency_value) > 0 &&
-      Number(options.audioConfig._channelConfiguration_value) > 0
-      ? {
-          sampleRate: Number(options.audioConfig._samplingFrequency_value),
-          channels: Number(options.audioConfig._channelConfiguration_value),
-          profile: String(options.audioConfig.audioObjectTypeName ?? ''),
-        }
-      : undefined,
+    metadata: {
+      flvSoundFormat: soundFormat,
+      flvAudioConfig: options.audioConfig ?? undefined,
+    },
+    audio: parsedAudio,
   };
+}
+
+function readScriptAudioInfo(
+  metadata: Record<string, unknown> | null | undefined,
+): { sampleRate: number; channels: number } | undefined {
+  if (!metadata) return undefined;
+  const sampleRate = Number(
+    metadata.audiosamplerate ??
+    metadata.audioSampleRate ??
+    metadata.audio_sample_rate ??
+    0,
+  );
+  if (sampleRate <= 0) return undefined;
+  const stereo = metadata.stereo;
+  const channels = stereo === true || stereo === 1 || stereo === 'true'
+    ? 2
+    : stereo === false || stereo === 0 || stereo === 'false'
+      ? 1
+      : Number(metadata.audiochannels ?? metadata.audioChannels ?? 1) || 1;
+  return { sampleRate, channels };
+}
+
+function readScriptAudioCodecId(
+  metadata: Record<string, unknown> | null | undefined,
+): number | undefined {
+  if (!metadata) return undefined;
+  const codecId = Number(metadata.audiocodecid ?? metadata.audioCodecId ?? NaN);
+  if (!Number.isFinite(codecId)) return undefined;
+  const mapped: Record<number, number> = {
+    2: 2,
+    7: 7,
+    8: 8,
+    10: 10,
+    14: 14,
+  };
+  return mapped[codecId];
 }

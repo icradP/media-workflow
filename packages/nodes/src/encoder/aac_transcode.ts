@@ -22,7 +22,7 @@ export const aacTranscodeNode: NodeDefinition<
   id: 'aac_transcode',
   category: 'transform',
   displayName: 'AAC Transcode',
-  description: 'Decode MP3/AAC/G.711 audio and re-encode to AAC for MP4 muxing.',
+  description: 'One-step MP3/AAC/G.711 → AAC transcode (shortcut for Audio Decode + AAC Encoder).',
   inputs: {
     source: { type: 'decode_source', label: 'Asset or Media Selection' },
   },

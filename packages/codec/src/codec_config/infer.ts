@@ -2,9 +2,14 @@ import type {
   AudioMediaTrack,
   MediaAsset,
   MediaSample,
+  MediaTrack,
   VideoMediaTrack,
 } from '@media-workflow/core';
-import { buildAscFromAdts } from '../aac/asc.js';
+import {
+  buildAscFromAdts,
+  buildAscFromAudioConfigRecord,
+  buildAscFromAudioParams,
+} from '../aac/asc.js';
 import { parseFlvTagAt } from '../flv/tag.js';
 import { buildAvcCFromNalus } from '../packet/avcc.js';
 import {
@@ -12,6 +17,19 @@ import {
   splitAnnexBNalus,
   splitLengthPrefixedNalUnits,
 } from '../nalu/annexb.js';
+
+export function enrichAssetCodecConfig(asset: MediaAsset): void {
+  for (const track of asset.tracks) {
+    if (track.kind === 'video' && !track.codecConfig?.byteLength) {
+      const codecConfig = inferVideoCodecConfig(track as VideoMediaTrack, asset.samples);
+      if (codecConfig?.byteLength) track.codecConfig = codecConfig;
+    }
+    if (track.kind === 'audio' && !track.codecConfig?.byteLength) {
+      const codecConfig = inferAudioCodecConfig(track as AudioMediaTrack, asset, asset.samples);
+      if (codecConfig?.byteLength) track.codecConfig = codecConfig;
+    }
+  }
+}
 
 export function inferVideoCodecConfig(
   track: VideoMediaTrack,
@@ -54,9 +72,29 @@ export function inferAudioCodecConfig(
   }
 
   if (asset.container.format === 'flv') {
-    return scanFlvAacSequenceHeader(asset.source.data);
+    const fromFile = scanFlvAacSequenceHeader(asset.source.data);
+    if (fromFile) return fromFile;
   }
-  return undefined;
+
+  const fromMetadata = buildAscFromAudioConfigRecord(
+    readFlvAudioConfigRecord(track.metadata),
+  );
+  if (fromMetadata) return fromMetadata;
+
+  return buildAscFromAudioParams({
+    audioObjectType: 2,
+    sampleRate: track.sampleRate,
+    channels: track.channels,
+  }) ?? undefined;
+}
+
+function readFlvAudioConfigRecord(
+  metadata: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const value = metadata.flvAudioConfig;
+  return value && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : null;
 }
 
 function extractAvcCFromAccessUnit(data: Uint8Array | undefined): Uint8Array | undefined {
@@ -92,4 +130,23 @@ function scanFlvAacSequenceHeader(fileBytes: Uint8Array): Uint8Array | undefined
     offset += 11 + tag.dataSize + 4;
   }
   return undefined;
+}
+
+export function resolveTrackCodecConfig(
+  track: MediaTrack,
+  asset: MediaAsset,
+): MediaTrack {
+  if (track.kind === 'video') {
+    const codecConfig = inferVideoCodecConfig(track as VideoMediaTrack, asset.samples);
+    if (codecConfig?.byteLength && !track.codecConfig?.byteLength) {
+      return { ...track, codecConfig };
+    }
+  }
+  if (track.kind === 'audio') {
+    const codecConfig = inferAudioCodecConfig(track as AudioMediaTrack, asset, asset.samples);
+    if (codecConfig?.byteLength && !track.codecConfig?.byteLength) {
+      return { ...track, codecConfig };
+    }
+  }
+  return track;
 }
