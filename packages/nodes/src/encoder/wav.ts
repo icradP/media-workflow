@@ -6,7 +6,7 @@ export const wavEncoderNode: NodeDefinition<
   { file: 'media_file' }
 > = {
   id: 'wav_encoder',
-  category: 'utility',
+  category: 'transform',
   displayName: 'WAV Encoder',
   description: 'Encode planar Float32 PCM into a WAV media file.',
   inputs: {

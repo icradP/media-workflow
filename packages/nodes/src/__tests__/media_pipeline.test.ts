@@ -7,7 +7,7 @@ import {
 } from '@media-workflow/core';
 import { autoAnalyzeNode } from '../parser/auto_detect.js';
 import { streamOverviewNode } from '../display/stream_info.js';
-import { trackSelectorNode } from '../utility/track_selector.js';
+import { trackSelectNode } from '../select/track_select.js';
 import { trackDetailNode } from '../display/track_detail.js';
 
 const wavBytes = createWavHeader({ sampleRate: 48_000, channels: 2, bitsPerSample: 16 });
@@ -44,7 +44,7 @@ describe('media workflow pipeline', () => {
         ['file', fileSourceNode as NodeDefinition],
         ['detect', autoAnalyzeNode as NodeDefinition],
         ['stream', streamOverviewNode as NodeDefinition],
-        ['selector', trackSelectorNode as NodeDefinition],
+        ['selector', trackSelectNode as NodeDefinition],
         ['detail', trackDetailNode as NodeDefinition],
       ]),
       edges: [
@@ -72,9 +72,9 @@ describe('media workflow pipeline', () => {
         {
           id: 'selector-to-detail',
           sourceNodeId: 'selector',
-          sourceOutput: 'track',
+          sourceOutput: 'selectedTrack',
           targetNodeId: 'detail',
-          targetInput: 'track',
+          targetInput: 'selectedTrack',
         },
       ],
     };
@@ -87,7 +87,9 @@ describe('media workflow pipeline', () => {
 
     const asset = results.get('detect')?.get('asset');
     const tracks = results.get('stream')?.get('tracks');
-    const selectedTrack = results.get('selector')?.get('track');
+    const selectedTrack = results.get('selector')?.get('selectedTrack') as {
+      track: unknown;
+    };
 
     expect(asset).toMatchObject({
       container: { format: 'wav' },
@@ -96,7 +98,7 @@ describe('media workflow pipeline', () => {
     expect(tracks).toMatchObject([
       { kind: 'audio', codec: 'PCM', sampleRate: 48_000, channels: 2 },
     ]);
-    expect(selectedTrack).toMatchObject({
+    expect(selectedTrack.track).toMatchObject({
       kind: 'audio',
       codec: 'PCM',
       sampleRate: 48_000,

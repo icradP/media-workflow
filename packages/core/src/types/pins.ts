@@ -13,11 +13,13 @@ import type {
   MediaAsset,
   MediaTrack,
   MediaSample,
+  SelectedTrack,
+  MediaSelection,
   EncodedPacket,
   VideoDecodeRequest,
   AudioDecodeRequest,
   DecodedVideoFrame,
-  DecodedVideoFrameSet,
+  DecodedVideoClip,
   PcmAudioClip,
   EncodedTrack,
   MediaFile,
@@ -43,6 +45,10 @@ export type DataPinType =
   | 'media_source'
   | 'media_probe'
   | 'media_asset'
+  | 'selection_source'
+  | 'decode_source'
+  | 'selected_track'
+  | 'media_selection'
   | 'track_list'
   | 'media_track'
   | 'media_samples'
@@ -50,6 +56,7 @@ export type DataPinType =
   | 'video_decode_request'
   | 'audio_decode_request'
   | 'decoded_video_frames'
+  | 'decoded_video'
   | 'pcm_audio'
   | 'encoded_track'
   | 'media_file'
@@ -78,13 +85,18 @@ export interface PinDataMap {
   media_source: MediaSource;
   media_probe: MediaProbe;
   media_asset: MediaAsset;
+  selection_source: MediaAsset | SelectedTrack;
+  decode_source: MediaAsset | MediaSelection;
+  selected_track: SelectedTrack;
+  media_selection: MediaSelection;
   track_list: MediaTrack[];
   media_track: MediaTrack;
   media_samples: MediaSample[];
   encoded_packets: EncodedPacket[];
   video_decode_request: VideoDecodeRequest;
   audio_decode_request: AudioDecodeRequest;
-  decoded_video_frames: DecodedVideoFrameSet;
+  decoded_video_frames: DecodedVideoClip;
+  decoded_video: DecodedVideoClip;
   pcm_audio: PcmAudioClip;
   encoded_track: EncodedTrack;
   media_file: MediaFile;

@@ -5,7 +5,7 @@ export const fileExportNode: NodeDefinition<
   { download: 'string' }
 > = {
   id: 'file_export',
-  category: 'display',
+  category: 'export',
   displayName: 'File Export',
   description: 'Prepare a media file for browser download.',
   inputs: {

@@ -159,6 +159,59 @@ export interface MediaAsset {
   analysisDurationMs: number;
 }
 
+export type MediaSampleOrder = 'presentation' | 'decode';
+
+export type MediaFrameFilter =
+  | 'all'
+  | 'key'
+  | 'non_key'
+  | 'I'
+  | 'P'
+  | 'B'
+  | 'IDR';
+
+export interface MediaSelectionCriteria {
+  startIndex: number;
+  endIndex?: number;
+  startTimeUs: number;
+  endTimeUs?: number;
+  frameType: MediaFrameFilter;
+  limit?: number;
+  order: MediaSampleOrder;
+}
+
+/**
+ * A track bound to its originating asset and ordered samples.
+ *
+ * This is the canonical output of track selection. Keeping the asset context
+ * removes the parallel asset+track wires that previously appeared throughout
+ * the graph.
+ */
+export interface SelectedTrack {
+  selectedTrackId: string;
+  asset: MediaAsset;
+  track: MediaTrack;
+  samples: MediaSample[];
+  diagnostics: MediaDiagnostic[];
+}
+
+/**
+ * A materialized, deterministic sample selection.
+ *
+ * Both explicit selection nodes and convenience decode tasks produce/consume
+ * this carrier, so inspection and decode paths share exactly one selection
+ * interpretation.
+ */
+export interface MediaSelection {
+  selectionId: string;
+  selectedTrack: SelectedTrack;
+  samples: MediaSample[];
+  rangeStartUs: number;
+  rangeEndUs?: number;
+  criteria: MediaSelectionCriteria;
+  diagnostics: MediaDiagnostic[];
+}
+
 // ─── decode / encode pipeline ───
 
 export type BitstreamFormat =
@@ -239,15 +292,20 @@ export interface DecodedVideoFrame {
   metadata: Record<string, unknown>;
 }
 
-export interface DecodedVideoFrameSet {
+export interface DecodedVideoClip {
   requestId: string;
+  selectionId?: string;
   backend: DecoderBackendInfo;
   frames: DecodedVideoFrame[];
   diagnostics: MediaDiagnostic[];
 }
 
+/** @deprecated Use DecodedVideoClip. */
+export type DecodedVideoFrameSet = DecodedVideoClip;
+
 export interface PcmAudioClip {
   clipId: string;
+  selectionId?: string;
   sourceTrackId: string;
   ptsUs: number;
   durationUs: number;
@@ -295,6 +353,7 @@ export type ByteData =
   | BufferData
   | MediaSource
   | MediaAsset
+  | MediaSelection
   | MediaSample[]
   | CompressedFrame
   | VideoFrameData

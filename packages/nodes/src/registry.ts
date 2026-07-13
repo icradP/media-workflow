@@ -2,17 +2,14 @@ import type { NodeDefinition } from '@media-workflow/core';
 import { fileLoaderNode } from './source/file_loader.js';
 import { urlFetcherNode } from './source/url_fetcher.js';
 import { autoAnalyzeNode } from './parser/auto_detect.js';
-import { trackSelectorNode } from './utility/track_selector.js';
-import { frameSelectorNode } from './utility/frame_selector.js';
-import { decodedFrameSelectorNode } from './utility/decoded_frame_selector.js';
-import { videoFrameRequestNode } from './planner/video_frame_request.js';
-import { audioRangeRequestNode } from './planner/audio_range_request.js';
-import { webcodecsVideoDecoderNode } from './decoder/webcodecs_video.js';
-import { webcodecsAudioDecoderNode } from './decoder/webcodecs_audio.js';
-import { g711DecoderNode } from './decoder/g711.js';
+import { trackSelectNode } from './select/track_select.js';
+import { mediaSelectNode } from './select/media_select.js';
+import { frameExtractNode } from './select/frame_extract.js';
+import { videoDecodeNode } from './decode/video_decode.js';
+import { audioDecodeNode } from './decode/audio_decode.js';
 import { frameTableNode } from './display/frame_table.js';
 import { hexViewNode } from './display/hex_view.js';
-import { yuvPreviewNode } from './display/yuv_preview.js';
+import { videoPreviewNode } from './display/video_preview.js';
 import { streamOverviewNode } from './display/stream_info.js';
 import { trackDetailNode } from './display/track_detail.js';
 import { wavEncoderNode } from './encoder/wav.js';
@@ -23,17 +20,14 @@ export const allNodes: NodeDefinition[] = [
   fileLoaderNode,
   urlFetcherNode,
   autoAnalyzeNode,
-  trackSelectorNode,
-  frameSelectorNode,
-  decodedFrameSelectorNode,
-  videoFrameRequestNode,
-  audioRangeRequestNode,
-  webcodecsVideoDecoderNode,
-  webcodecsAudioDecoderNode,
-  g711DecoderNode,
+  trackSelectNode,
+  mediaSelectNode,
+  videoDecodeNode,
+  audioDecodeNode,
+  frameExtractNode,
   frameTableNode,
   hexViewNode,
-  yuvPreviewNode,
+  videoPreviewNode,
   streamOverviewNode,
   trackDetailNode,
   wavEncoderNode,

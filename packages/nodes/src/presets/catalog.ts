@@ -29,26 +29,26 @@ export const WORKFLOW_PRESET_CATALOG: WorkflowPresetCatalogEntry[] = [
   },
   {
     id: 'ffprobe-overview',
-    name: 'FFprobe 全量概览',
-    description: '容器、轨道、全部 sample 表与原始 hex 预览。',
+    name: '媒体结构概览',
+    description: '容器、首轨 sample 选择与原始 hex 预览。',
     preset: ffprobeOverviewPreset as WorkflowPreset,
   },
   {
     id: 'ffprobe-video-track',
-    name: 'FFprobe 视频轨',
-    description: '选择第一路视频轨，查看首个关键帧字节。',
+    name: '专业视频选择',
+    description: '显式选轨和选帧，并查看关键帧表与压缩字节。',
     preset: ffprobeVideoTrackPreset as WorkflowPreset,
   },
   {
     id: 'ffprobe-audio-track',
-    name: 'FFprobe 音频轨',
-    description: '选择第一路音频轨，查看前 50 帧字节。',
+    name: '专业音频选择',
+    description: '显式选轨和时间范围，并查看音频 sample 与字节。',
     preset: ffprobeAudioTrackPreset as WorkflowPreset,
   },
   {
     id: 'decode-first-keyframe',
-    name: '视频关键帧解码规划',
-    description: '规划首个关键帧 GOP 解码请求（不含解码器节点）。',
+    name: '首个视频关键帧选择',
+    description: '生成可复用于检查、解码和导出的 MediaSelection。',
     preset: decodeFirstKeyframePreset as WorkflowPreset,
   },
   {
@@ -59,8 +59,8 @@ export const WORKFLOW_PRESET_CATALOG: WorkflowPresetCatalogEntry[] = [
   },
   {
     id: 'decode-audio-range',
-    name: '音频片段解码规划',
-    description: '规划 5 秒 AAC 音频解码范围（不含解码器节点）。',
+    name: '音频片段解码导出',
+    description: '直接解码前 5 秒音频并导出 WAV。',
     preset: decodeAudioRangePreset as WorkflowPreset,
   },
 ];

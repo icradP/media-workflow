@@ -16,13 +16,32 @@ import {
 } from './node_execution_state.js';
 import {
   attachNodeParamWidgets,
+  initNodeParamDefaults,
   minimumDisplayNodeHeight,
   preferredNodeWidth,
 } from './node_widgets.js';
-import { nodesByCategory, allNodes, WORKFLOW_PRESET_CATALOG, DEFAULT_WORKFLOW_PRESET_ID } from '@media-workflow/nodes';
-import { graphToJSON, createMemoryCache, executeGraph, analyzeRunnableWorkflow } from '@media-workflow/core';
+import {
+  nodesByCategory,
+  allNodes,
+  WORKFLOW_PRESET_CATALOG,
+  DEFAULT_WORKFLOW_PRESET_ID,
+  type WorkflowPreset,
+} from '@media-workflow/nodes';
+import { createMemoryCache, executeGraph, analyzeRunnableWorkflow } from '@media-workflow/core';
 import type { ExecutionCache, NodeExecutionEvent } from '@media-workflow/core';
-import { extractWorkflowFromLGraph, loadWorkflowPresetIntoLGraph } from './graph_adapter.js';
+import {
+  exportWorkflowPresetFromLGraph,
+  extractWorkflowFromLGraph,
+  loadWorkflowPresetIntoLGraph,
+} from './graph_adapter.js';
+import {
+  attachFrameSelectorUi,
+  frameSelectorNodeHeight,
+  frameSelectorNodeWidth,
+  updateFrameSelectorPreviewFromEvent,
+  type FrameSelectorNode,
+} from './frame_selector_ui.js';
+import { initNodeInspector } from './node_inspector.js';
 import { clearViewport, renderExecutionEvent } from './viewport.js';
 
 // ─── Pin type → LiteGraph color ───
@@ -33,6 +52,10 @@ const PIN_COLORS: Record<string, string> = {
   media_source: '#4ecdc4',
   media_probe: '#8b93a7',
   media_asset: '#ff6b6b',
+  selection_source: '#c084fc',
+  decode_source: '#c084fc',
+  selected_track: '#7c5cff',
+  media_selection: '#feca57',
   track_list: '#a29bfe',
   media_track: '#7c5cff',
   media_samples: '#feca57',
@@ -40,6 +63,7 @@ const PIN_COLORS: Record<string, string> = {
   video_decode_request: '#54a0ff',
   audio_decode_request: '#5f27cd',
   decoded_video_frames: '#48dbfb',
+  decoded_video: '#48dbfb',
   pcm_audio: '#5f27cd',
   encoded_track: '#ff9f43',
   media_file: '#10ac84',
@@ -63,7 +87,7 @@ const BYTE_DATA_LITEGRAPH_TYPES = [
   'buffer',
   'media_source',
   'media_asset',
-  'media_samples',
+  'media_selection',
   'encoded_packets',
   'decoded_video_frames',
   'pcm_audio',
@@ -76,12 +100,26 @@ const BYTE_DATA_LITEGRAPH_TYPES = [
   'sei_payload',
 ].join(',');
 
+const TIMELINE_NODE_IDS = new Set([
+  'media_select',
+  'video_decode',
+  'audio_decode',
+]);
+
 function liteGraphInputType(pinType: string): string {
-  return pinType === 'byte_data' ? BYTE_DATA_LITEGRAPH_TYPES : pinType;
+  if (pinType === 'byte_data') return BYTE_DATA_LITEGRAPH_TYPES;
+  if (pinType === 'selection_source') return 'media_asset,selected_track';
+  if (pinType === 'decode_source') return 'media_asset,media_selection';
+  return pinType;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
   source: '#4ecdc4',
+  analyze: '#7c5cff',
+  select: '#ff9f43',
+  decode: '#54a0ff',
+  inspect: '#feca57',
+  transform: '#10ac84',
   parser: '#7c5cff',
   demux: '#ff9f43',
   decoder: '#54a0ff',
@@ -156,7 +194,16 @@ function applyComputedNodeSize(
   const minHeight = minimumDisplayNodeHeight(nodeDef);
   const height = Math.max(computed[1], minHeight);
 
-  if (nodeDef.category === 'display') {
+  if (TIMELINE_NODE_IDS.has(nodeDef.id)) {
+    node.size = [frameSelectorNodeWidth(), frameSelectorNodeHeight()];
+    return;
+  }
+
+  if (
+    nodeDef.category === 'display' ||
+    nodeDef.category === 'inspect' ||
+    nodeDef.id === 'file_export'
+  ) {
     node.size = [Math.max(width, 280), height + 156];
     return;
   }
@@ -166,7 +213,7 @@ function applyComputedNodeSize(
 
 export function registerNodeTypes(
   options: RegisterNodeTypeOptions = {},
-  onParamChange?: () => void,
+  onParamChange?: (nodeId: string) => void,
 ) {
   configureLiteGraphLayout();
   const canvasClass = LGraphCanvas as unknown as {
@@ -216,12 +263,23 @@ export function registerNodeTypes(
           options.onRequestFile?.(this);
         });
       }
+      initNodeParamDefaults(this as never, nodeDef);
       attachNodeParamWidgets(this as never, nodeDef, onParamChange);
-      if (nodeDef.category === 'display') {
+      if (
+        nodeDef.category === 'display' ||
+        nodeDef.category === 'inspect' ||
+        nodeDef.id === 'file_export'
+      ) {
         this.displayPreview = ['等待分析结果…'];
         attachExecutionHighlight(this, context => drawDisplayPreview(this, context));
       } else {
         attachExecutionHighlight(this);
+      }
+      if (TIMELINE_NODE_IDS.has(nodeDef.id)) {
+        attachFrameSelectorUi(
+          this as FrameSelectorNode,
+          () => onParamChange?.(String(this.id)),
+        );
       }
       applyComputedNodeSize(this, nodeDef);
       this.onExecute = () => {
@@ -318,12 +376,13 @@ function summarizeDisplayEvent(event: NodeExecutionEvent): string[] {
   }
 
   if (event.node.id === 'track_detail') {
-    const track = event.inputs.track as {
+    const selectedTrack = event.inputs.selectedTrack as { track?: {
       trackId?: unknown;
       kind?: unknown;
       codec?: unknown;
       sampleCount?: unknown;
-    } | undefined;
+    } } | undefined;
+    const track = selectedTrack?.track;
     return [
       String(track?.trackId ?? 'No track'),
       `${String(track?.kind ?? 'unknown')} · ${String(track?.codec ?? 'Unknown')}`,
@@ -331,10 +390,10 @@ function summarizeDisplayEvent(event: NodeExecutionEvent): string[] {
     ];
   }
 
-  if (event.node.id === 'frame_table') {
-    const samples = event.outputs.samples;
+  if (event.node.id === 'sample_table') {
+    const selection = event.outputs.selection as { samples?: unknown[] } | undefined;
     return [
-      `${Array.isArray(samples) ? samples.length : 0} samples`,
+      `${selection?.samples?.length ?? 0} samples`,
       'PTS / DTS / size / offset',
     ];
   }
@@ -344,8 +403,8 @@ function summarizeDisplayEvent(event: NodeExecutionEvent): string[] {
     return ['Hex preview', preview.slice(0, 46), preview.slice(46, 92)];
   }
 
-  if (event.node.id === 'yuv_preview') {
-    const frame = event.inputs.frame as {
+  if (event.node.id === 'video_preview') {
+    const frame = selectedPreviewFrame(event) as {
       displayWidth?: number;
       displayHeight?: number;
       format?: string;
@@ -364,7 +423,7 @@ function summarizeDisplayEvent(event: NodeExecutionEvent): string[] {
 }
 
 function createYuvDisplayCanvas(event: NodeExecutionEvent): HTMLCanvasElement | undefined {
-  const frame = event.inputs.frame as {
+  const frame = selectedPreviewFrame(event) as {
     displayWidth?: number;
     displayHeight?: number;
     planes?: Uint8Array[];
@@ -388,6 +447,14 @@ function createYuvDisplayCanvas(event: NodeExecutionEvent): HTMLCanvasElement | 
     ],
   );
   return previewCanvas;
+}
+
+function selectedPreviewFrame(event: NodeExecutionEvent): unknown {
+  const video = event.inputs.video as { frames?: unknown[] } | undefined;
+  const frames = video?.frames ?? [];
+  if (frames.length === 0) return undefined;
+  const requested = Math.max(0, Math.floor(Number(event.params.frameIndex) || 0));
+  return frames[Math.min(frames.length - 1, requested)];
 }
 
 function renderI420FrameToCanvas(
@@ -460,10 +527,10 @@ export function createApp(): MediaWorkflowApp {
 
     registerNodeTypes(
       { onRequestFile: openFilePickerForNode },
-      () => execCache.clear(),
+      nodeId => execCache.invalidate(nodeId),
     );
     installInlineNodeWidgetEditor(canvas, canvasWrap, {
-      onValueChange: () => execCache.clear(),
+      onValueChange: nodeId => execCache.invalidate(nodeId),
     });
     installCanvasNodeMenu(canvas, {
       categories: nodesByCategory(),
@@ -479,6 +546,14 @@ export function createApp(): MediaWorkflowApp {
             : `已恢复 ${updated.length} 个节点 · 将参与执行`,
           'idle',
         );
+      },
+    });
+    initNodeInspector({
+      getGraph: () => graph,
+      getCanvas: () => canvas,
+      onParamChange: nodeId => {
+        execCache.invalidate(nodeId);
+        canvas.setDirty(true, true);
       },
     });
 
@@ -636,7 +711,16 @@ export function createApp(): MediaWorkflowApp {
   }
 
   function setupToolbar() {
-    document.getElementById('save-workflow-button')?.addEventListener('click', serializeAndLog);
+    const loadInput = document.getElementById('load-workflow-input') as HTMLInputElement | null;
+    document.getElementById('save-workflow-button')?.addEventListener('click', saveWorkflowToFile);
+    document.getElementById('load-workflow-button')?.addEventListener('click', () => {
+      loadInput?.click();
+    });
+    loadInput?.addEventListener('change', () => {
+      const file = loadInput.files?.[0];
+      loadInput.value = '';
+      if (file) void loadWorkflowFromFile(file);
+    });
     document.getElementById('run-workflow-button')?.addEventListener('click', () => {
       void runWorkflow();
     });
@@ -746,7 +830,7 @@ export function createApp(): MediaWorkflowApp {
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        serializeAndLog();
+        saveWorkflowToFile();
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const selected = (canvas as unknown as { selected_nodes?: Record<string, unknown> }).selected_nodes;
@@ -841,6 +925,7 @@ export function createApp(): MediaWorkflowApp {
 
           renderExecutionEvent(event);
           updateDisplayNodePreview(event);
+          updateFrameSelectorNodePreview(event);
           setStatus(
             event.status === 'failed'
               ? `执行失败 · ${event.node.displayName} · ${event.error?.message ?? 'Unknown error'}`
@@ -866,16 +951,39 @@ export function createApp(): MediaWorkflowApp {
     }
   }
 
-  function serializeAndLog() {
-    const { graph: workflow } = extractWorkflowFromLGraph(graph, {
-      getFileForNode: nodeId => filesByNode.get(nodeId),
-    });
-    const json = graphToJSON(workflow);
-    console.log('Workflow JSON:', json);
+  function saveWorkflowToFile() {
+    const preset = exportWorkflowPresetFromLGraph(graph);
+    const json = JSON.stringify(preset, null, 2);
+    const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `media-workflow-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
     setStatus(
-      `工作流已序列化 · ${workflow.nodes.size} 个节点 · ${workflow.edges.length} 条连线`,
+      `工作流已保存到本地 · ${preset.nodes.length} 个节点 · ${preset.edges.length} 条连线`,
       'success',
     );
+  }
+
+  async function loadWorkflowFromFile(file: File): Promise<void> {
+    try {
+      const preset = parseWorkflowPreset(await file.text());
+      filesByNode.clear();
+      execCache.clear();
+      clearNodeExecutionStates(graph);
+      clearNodeExecutionIgnored(graph);
+      clearViewport();
+      renderEmptyViewport();
+      loadWorkflowPresetIntoLGraph(graph, preset);
+      canvas.setDirty(true, true);
+      setStatus(
+        `${preset.name} 已从本地载入 · ${preset.nodes.length} 个节点 · 请重新选择媒体文件`,
+        'success',
+      );
+    } catch (error) {
+      setStatus(`加载工作流失败 · ${error instanceof Error ? error.message : String(error)}`, 'error');
+    }
   }
 
   function setStatus(msg: string, state: StatusState = 'idle') {
@@ -884,14 +992,30 @@ export function createApp(): MediaWorkflowApp {
     document.getElementById('status')?.setAttribute('data-state', state);
   }
 
+  function updateFrameSelectorNodePreview(event: NodeExecutionEvent) {
+    if (!TIMELINE_NODE_IDS.has(event.node.id)) return;
+    const node = (graph as unknown as { _nodes: FrameSelectorNode[] })._nodes.find(
+      candidate => String(candidate.id) === event.nodeId,
+    );
+    if (!node) return;
+    updateFrameSelectorPreviewFromEvent(node, event);
+    canvas.setDirty(true, true);
+  }
+
   function updateDisplayNodePreview(event: NodeExecutionEvent) {
-    if (event.node.category !== 'display') return;
+    if (
+      event.node.category !== 'display' &&
+      event.node.category !== 'inspect' &&
+      event.node.id !== 'file_export'
+    ) {
+      return;
+    }
     const node = (graph as unknown as { _nodes: LGraphNodeBase[] })._nodes.find(
       candidate => String(candidate.id) === event.nodeId,
     );
     if (!node) return;
     node.displayPreview = summarizeDisplayEvent(event);
-    node.displayCanvas = event.node.id === 'yuv_preview'
+    node.displayCanvas = event.node.id === 'video_preview'
       ? createYuvDisplayCanvas(event)
       : undefined;
     canvas.setDirty(true, true);
@@ -933,6 +1057,38 @@ function getSelectedCanvasNodeIds(canvas: LGraphCanvas): string[] {
   const selected = (canvas as unknown as { selected_nodes?: Record<string, unknown> }).selected_nodes;
   if (!selected) return [];
   return Object.keys(selected);
+}
+
+function parseWorkflowPreset(text: string): WorkflowPreset {
+  const value: unknown = JSON.parse(text);
+  if (!isRecord(value) || value.version !== 1 || typeof value.name !== 'string') {
+    throw new Error('文件不是受支持的工作流 JSON');
+  }
+  if (!Array.isArray(value.nodes) || !Array.isArray(value.edges)) {
+    throw new Error('工作流缺少 nodes 或 edges');
+  }
+  for (const node of value.nodes) {
+    if (!isRecord(node) || typeof node.id !== 'string' || typeof node.type !== 'string') {
+      throw new Error('工作流包含无效节点');
+    }
+  }
+  for (const edge of value.edges) {
+    if (
+      !isRecord(edge) ||
+      typeof edge.id !== 'string' ||
+      typeof edge.sourceNodeId !== 'string' ||
+      typeof edge.sourceOutput !== 'string' ||
+      typeof edge.targetNodeId !== 'string' ||
+      typeof edge.targetInput !== 'string'
+    ) {
+      throw new Error('工作流包含无效连线');
+    }
+  }
+  return value as unknown as WorkflowPreset;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function buildExecutionSkipSummary(skippedCount: number, ignoredCount: number): string | null {

@@ -17,20 +17,20 @@ interface DockState {
   results: PanelLayout;
 }
 
-const STORAGE_KEY = 'media-workflow-panel-dock';
+const STORAGE_KEY = 'media-workflow-panel-dock-v3';
 
 const PANEL_CONFIG: Record<
   PanelId,
   { elementId: string; defaultWidth: number; defaultHeight: number; label: string }
 > = {
   palette: { elementId: 'palette', defaultWidth: 248, defaultHeight: 520, label: '节点库' },
-  inspector: { elementId: 'properties', defaultWidth: 280, defaultHeight: 520, label: '检查器' },
+  inspector: { elementId: 'properties', defaultWidth: 320, defaultHeight: 520, label: '检查器' },
   results: { elementId: 'status', defaultWidth: 720, defaultHeight: 280, label: '分析结果' },
 };
 
 const DEFAULT_STATE: DockState = {
   palette: { mode: 'docked', x: 16, y: 72, width: 248, height: 520 },
-  inspector: { mode: 'docked', x: 0, y: 72, width: 280, height: 520 },
+  inspector: { mode: 'docked', x: 0, y: 72, width: 320, height: 520 },
   results: { mode: 'docked', x: 16, y: 0, width: 720, height: 280 },
 };
 

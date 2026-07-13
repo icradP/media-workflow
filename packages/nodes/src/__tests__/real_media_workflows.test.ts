@@ -8,6 +8,7 @@ import {
   executeGraph,
   type CodecFamily,
   type MediaSource,
+  type MediaSelection,
   type MediaTrack,
   type NodeDefinition,
   type NodeExecutionEvent,
@@ -16,8 +17,8 @@ import {
 import { fileLoaderNode } from '../source/file_loader.js';
 import { autoAnalyzeNode } from '../parser/auto_detect.js';
 import { streamOverviewNode } from '../display/stream_info.js';
-import { trackSelectorNode } from '../utility/track_selector.js';
-import { frameSelectorNode } from '../utility/frame_selector.js';
+import { trackSelectNode } from '../select/track_select.js';
+import { mediaSelectNode } from '../select/media_select.js';
 import { trackDetailNode } from '../display/track_detail.js';
 import { frameTableNode } from '../display/frame_table.js';
 import { hexViewNode } from '../display/hex_view.js';
@@ -72,7 +73,7 @@ describe('real media files through registered node combinations', () => {
       graph,
       selectorNodeIds,
       detailNodeIds,
-      frameSelectorNodeIds,
+      selectionNodeIds,
       filteredTableNodeIds,
     } = buildWorkflow(source, record);
 
@@ -95,22 +96,22 @@ describe('real media files through registered node combinations', () => {
     expect(overviewTracks).toBe(asset.tracks);
 
     for (const [position, expected] of record.expected.streams.entries()) {
-      const selected = results.get(selectorNodeIds[position]!)?.get('track') as MediaTrack;
+      const selectedTrack = results
+        .get(selectorNodeIds[position]!)
+        ?.get('selectedTrack') as { track: MediaTrack };
+      const selected = selectedTrack.track;
       assertTrackMatchesBaseline(selected, expected);
 
       const detailEvent = events.find(event => event.nodeId === detailNodeIds[position]);
-      expect(detailEvent?.inputs.track).toBe(selected);
+      expect(detailEvent?.inputs.selectedTrack).toBe(selectedTrack);
       expect(detailEvent?.node.id).toBe('track_detail');
 
       const selectedFrames = results
-        .get(frameSelectorNodeIds[position]!)
-        ?.get('samples') as Array<{ trackId: string }>;
-      expect(selectedFrames.every(sample => sample.trackId === selected.trackId)).toBe(true);
-      expect(results.get(filteredTableNodeIds[position]!)?.get('samples')).toBe(selectedFrames);
+        .get(selectionNodeIds[position]!)
+        ?.get('selection') as MediaSelection;
+      expect(selectedFrames.samples.every(sample => sample.trackId === selected.trackId)).toBe(true);
+      expect(results.get(filteredTableNodeIds[position]!)?.get('selection')).toBe(selectedFrames);
     }
-
-    const samples = results.get('frames')?.get('samples') as unknown[];
-    expect(samples).toBe(asset.samples);
 
     const preview = results.get('hex')?.get('preview');
     expect(typeof preview).toBe('string');
@@ -121,10 +122,9 @@ describe('real media files through registered node combinations', () => {
       'file_loader',
       'auto_analyze',
       'stream_overview',
-      'frame_table',
       'hex_view',
-      ...(record.expected.streamCount > 0 ? ['track_selector', 'track_detail'] : []),
-      ...(record.expected.streamCount > 0 ? ['frame_selector'] : []),
+      ...(record.expected.streamCount > 0 ? ['track_select', 'track_detail'] : []),
+      ...(record.expected.streamCount > 0 ? ['media_select', 'sample_table'] : []),
     ]));
   }, 30_000);
 });
@@ -136,7 +136,7 @@ function buildWorkflow(
   graph: WorkflowGraph;
   selectorNodeIds: string[];
   detailNodeIds: string[];
-  frameSelectorNodeIds: string[];
+  selectionNodeIds: string[];
   filteredTableNodeIds: string[];
 } {
   const sourceNode: NodeDefinition = {
@@ -149,18 +149,16 @@ function buildWorkflow(
     ['file', sourceNode],
     ['analyze', autoAnalyzeNode as NodeDefinition],
     ['overview', streamOverviewNode as NodeDefinition],
-    ['frames', frameTableNode as NodeDefinition],
     ['hex', hexViewNode as NodeDefinition],
   ]);
   const edges: WorkflowGraph['edges'] = [
     edge('file-analyze', 'file', 'source', 'analyze', 'source'),
     edge('file-hex', 'file', 'source', 'hex', 'bytes'),
     edge('analyze-overview', 'analyze', 'asset', 'overview', 'asset'),
-    edge('analyze-frames', 'analyze', 'asset', 'frames', 'asset'),
   ];
   const selectorNodeIds: string[] = [];
   const detailNodeIds: string[] = [];
-  const frameSelectorNodeIds: string[] = [];
+  const selectionNodeIds: string[] = [];
   const filteredTableNodeIds: string[] = [];
   const kindPositions = new Map<string, number>();
 
@@ -169,27 +167,26 @@ function buildWorkflow(
     kindPositions.set(expected.kind, kindPosition + 1);
     const selectorId = `selector-${expected.index}`;
     const detailId = `detail-${expected.index}`;
-    const frameSelectorId = `frame-selector-${expected.index}`;
+    const selectionId = `selection-${expected.index}`;
     const filteredTableId = `filtered-table-${expected.index}`;
     selectorNodeIds.push(selectorId);
     detailNodeIds.push(detailId);
-    frameSelectorNodeIds.push(frameSelectorId);
+    selectionNodeIds.push(selectionId);
     filteredTableNodeIds.push(filteredTableId);
     nodes.set(selectorId, configuredSelector(expected.kind, kindPosition));
     nodes.set(detailId, trackDetailNode as NodeDefinition);
-    nodes.set(frameSelectorId, frameSelectorNode as NodeDefinition);
+    nodes.set(selectionId, mediaSelectNode as NodeDefinition);
     nodes.set(filteredTableId, frameTableNode as NodeDefinition);
     edges.push(
       edge(`analyze-${selectorId}`, 'analyze', 'asset', selectorId, 'asset'),
-      edge(`${selectorId}-${detailId}`, selectorId, 'track', detailId, 'track'),
-      edge(`analyze-${frameSelectorId}`, 'analyze', 'asset', frameSelectorId, 'asset'),
-      edge(`${selectorId}-${frameSelectorId}`, selectorId, 'track', frameSelectorId, 'track'),
+      edge(`${selectorId}-${detailId}`, selectorId, 'selectedTrack', detailId, 'selectedTrack'),
+      edge(`${selectorId}-${selectionId}`, selectorId, 'selectedTrack', selectionId, 'source'),
       edge(
-        `${frameSelectorId}-${filteredTableId}`,
-        frameSelectorId,
-        'samples',
+        `${selectionId}-${filteredTableId}`,
+        selectionId,
+        'selection',
         filteredTableId,
-        'samples',
+        'selection',
       ),
     );
   }
@@ -198,15 +195,15 @@ function buildWorkflow(
     graph: { version: 1, nodes, edges },
     selectorNodeIds,
     detailNodeIds,
-    frameSelectorNodeIds,
+    selectionNodeIds,
     filteredTableNodeIds,
   };
 }
 
 function configuredSelector(kind: string, index: number): NodeDefinition {
-  const params = trackSelectorNode.params!;
+  const params = trackSelectNode.params!;
   return {
-    ...trackSelectorNode,
+    ...trackSelectNode,
     params: {
       ...params,
       kind: { ...params.kind!, default: kind },

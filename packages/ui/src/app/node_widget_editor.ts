@@ -24,7 +24,7 @@ interface EditableWidget {
 }
 
 export interface InlineWidgetEditorOptions {
-  onValueChange?: () => void;
+  onValueChange?: (nodeId: string) => void;
 }
 
 export function installInlineNodeWidgetEditor(
@@ -75,7 +75,7 @@ export function installInlineNodeWidgetEditor(
       onCommit: nextValue => {
         callback(nextValue);
         syncWidgetProperty(node, widget, nextValue);
-        options.onValueChange?.();
+        options.onValueChange?.(String(node.id));
         this.setDirty(true, true);
         node.setDirtyCanvas?.(true, true);
       },

@@ -22,15 +22,15 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const workflowsDir = join(root, 'packages', 'nodes', 'presets');
 
 describe('decode pipeline nodes', () => {
-  it('registers planner, decoder, encoder and export nodes', () => {
+  it('registers selection, task decoder, transform and export nodes', () => {
     const ids = [
-      'video_frame_request',
-      'audio_range_request',
-      'decoded_frame_selector',
-      'webcodecs_video_decoder',
-      'webcodecs_audio_decoder',
-      'g711_decoder',
-      'yuv_preview',
+      'track_select',
+      'media_select',
+      'video_decode',
+      'audio_decode',
+      'frame_extract',
+      'video_preview',
+      'sample_table',
       'wav_encoder',
       'raw_yuv_exporter',
       'file_export',
@@ -74,30 +74,64 @@ describe('decode pipeline nodes', () => {
 });
 
 describe('decode workflow presets', () => {
-  it('plans a first-keyframe video decode request for FLV', async () => {
+  it('materializes a stable first-keyframe video selection for FLV', async () => {
     const preset = readPreset('decode-first-keyframe.workflow.json');
     const source = sourceFromFixture('tests/869247060193353-ok.flv');
     const results = await runPreset(preset, source);
-    const request = results.get('request-frame')?.get('request') as {
-      targetSampleIds: string[];
-      decodePackets: Array<{ isKey: boolean }>;
+    const selection = results.get('selection')?.get('selection') as {
+      selectionId: string;
+      samples: Array<{ isKey: boolean }>;
     } | undefined;
-    expect(request?.targetSampleIds.length).toBe(1);
-    expect(request?.decodePackets.some(packet => packet.isKey)).toBe(true);
+    expect(selection?.selectionId).toMatch(/^selection:/);
+    expect(selection?.samples).toHaveLength(1);
+    expect(selection?.samples[0]?.isKey).toBe(true);
   });
 
-  it('plans a 5-second audio decode range for FLV', async () => {
-    const preset = readPreset('decode-audio-range.workflow.json');
+  it('materializes an exact five-second audio selection for FLV', async () => {
+    const preset: WorkflowPreset = {
+      version: 1,
+      name: 'Audio selection',
+      nodes: [
+        { id: 'file', type: 'file_loader' },
+        { id: 'analyze', type: 'auto_analyze' },
+        {
+          id: 'selection',
+          type: 'media_select',
+          params: {
+            kind: 'audio',
+            trackIndex: 0,
+            startTimeSeconds: 0,
+            endTimeSeconds: 5,
+          },
+        },
+      ],
+      edges: [
+        {
+          id: 'file-analyze',
+          sourceNodeId: 'file',
+          sourceOutput: 'source',
+          targetNodeId: 'analyze',
+          targetInput: 'source',
+        },
+        {
+          id: 'analyze-selection',
+          sourceNodeId: 'analyze',
+          sourceOutput: 'asset',
+          targetNodeId: 'selection',
+          targetInput: 'source',
+        },
+      ],
+    };
     const source = sourceFromFixture('tests/869247060193353-ok.flv');
     const results = await runPreset(preset, source);
-    const request = results.get('request-audio')?.get('request') as {
+    const selection = results.get('selection')?.get('selection') as {
       rangeStartUs: number;
-      rangeEndUs: number;
-      decodePackets: unknown[];
+      rangeEndUs?: number;
+      samples: unknown[];
     } | undefined;
-    expect(request?.rangeStartUs).toBe(737_399_000);
-    expect(request?.rangeEndUs).toBe(742_399_000);
-    expect(request?.decodePackets.length).toBeGreaterThan(0);
+    expect(selection?.rangeStartUs).toBe(737_399_000);
+    expect(selection?.rangeEndUs).toBe(742_399_000);
+    expect(selection?.samples.length).toBeGreaterThan(0);
   });
 });
 

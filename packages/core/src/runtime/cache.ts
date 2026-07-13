@@ -68,6 +68,25 @@ function fingerprintValue(value: unknown, seen: WeakSet<object>): string {
   if (typeof value === 'bigint') return `i:${value}`;
   if (typeof value !== 'object') return `${typeof value}:${String(value)}`;
 
+  if ('selectionId' in value) {
+    return `selection:${String((value as { selectionId: unknown }).selectionId)}`;
+  }
+
+  if ('selectedTrackId' in value) {
+    return `track:${String((value as { selectedTrackId: unknown }).selectedTrackId)}`;
+  }
+
+  if ('asset' in value && 'track' in value) {
+    const selectedTrack = value as {
+      asset?: { source?: { sourceId?: unknown; version?: unknown } };
+      track?: { trackId?: unknown };
+    };
+    const source = selectedTrack.asset?.source;
+    if (source?.sourceId !== undefined && source.version !== undefined) {
+      return `track:${String(source.sourceId)}@${String(source.version)}:${String(selectedTrack.track?.trackId)}`;
+    }
+  }
+
   if ('sourceId' in value && 'version' in value) {
     const source = value as { sourceId: unknown; version: unknown };
     return `source:${String(source.sourceId)}@${String(source.version)}`;

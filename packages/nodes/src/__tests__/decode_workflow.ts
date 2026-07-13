@@ -47,7 +47,10 @@ export async function executeFirstKeyframeDecodeWorkflow(
     new AbortController().signal,
   );
 
-  const frame = results.get('select-decoded')?.get('frame') as DecodedVideoFrame | undefined;
+  const video = results.get('decode-video')?.get('video') as {
+    frames?: DecodedVideoFrame[];
+  } | undefined;
+  const frame = video?.frames?.[0];
   if (!frame) {
     throw new Error('Decode workflow did not produce a decoded frame');
   }

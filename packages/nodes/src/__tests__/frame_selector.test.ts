@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createContext,
   type MediaAsset,
   type MediaSample,
   type MediaTrack,
 } from '@media-workflow/core';
-import { frameSelectorNode } from '../utility/frame_selector.js';
+import {
+  materializeMediaSelection,
+  selectTrack,
+} from '@media-workflow/codec';
 
 const track: MediaTrack = {
   trackId: 'mp4:video:1',
@@ -53,19 +55,19 @@ const asset: MediaAsset = {
   analysisDurationMs: 1,
 };
 
-describe('Frame Selector', () => {
+describe('MediaSelection', () => {
   it('selects an inclusive track-local index range', async () => {
     const selected = await execute({ startIndex: 1, endIndex: 3 });
     expect(selected.map(item => item.index)).toEqual([1, 2, 3]);
   });
 
-  it('combines relative time range and picture type filters', async () => {
+  it('combines a half-open relative time range and picture type filters', async () => {
     const selected = await execute({
       startTimeSeconds: 0.08,
       endTimeSeconds: 0.2,
       frameType: 'B',
     });
-    expect(selected.map(item => item.index)).toEqual([2, 5]);
+    expect(selected.map(item => item.index)).toEqual([2]);
   });
 
   it('filters key and non-key samples', async () => {
@@ -81,9 +83,28 @@ describe('Frame Selector', () => {
   });
 
   it('rejects a track from another asset', async () => {
-    await expect(execute({}, { ...track, trackId: 'other' })).rejects.toThrow(
-      'does not belong to this asset',
+    expect(() => selectTrack(asset, { trackId: 'other' })).toThrow('No track matched');
+  });
+
+  it('uses a deterministic selection ID', async () => {
+    const first = select({ startIndex: 1, endIndex: 3 });
+    const second = select({ startIndex: 1, endIndex: 3 });
+    expect(first.selectionId).toBe(second.selectionId);
+  });
+
+  it('keeps presentation selection independent from DTS order', () => {
+    const reorderedAsset: MediaAsset = {
+      ...asset,
+      samples: samples.map((item, index) => ({
+        ...item,
+        dtsUs: index === 1 ? 1_080_000 : index === 2 ? 1_040_000 : item.dtsUs,
+      })),
+    };
+    const selection = materializeMediaSelection(
+      selectTrack(reorderedAsset, { kind: 'video' }),
+      { startIndex: 1, endIndex: 1, order: 'presentation' },
     );
+    expect(selection.samples.map(item => item.index)).toEqual([1]);
   });
 });
 
@@ -91,20 +112,25 @@ async function execute(
   overrides: Record<string, unknown>,
   selectedTrack: MediaTrack = track,
 ): Promise<MediaSample[]> {
-  const params = Object.fromEntries(
-    Object.entries(frameSelectorNode.params!).map(([name, definition]) => [
-      name,
-      overrides[name] ?? definition.default,
-    ]),
-  );
-  const result = await frameSelectorNode.execute(
-    createContext(new AbortController().signal),
-    {
-      inputs: { asset, track: selectedTrack },
-      params,
-    },
-  );
-  return result.samples;
+  return select(overrides, selectedTrack).samples;
+}
+
+function select(
+  overrides: Record<string, unknown>,
+  selectedTrack: MediaTrack = track,
+) {
+  const trackSelection = selectTrack(asset, { trackId: selectedTrack.trackId });
+  return materializeMediaSelection(trackSelection, {
+    startIndex: Number(overrides.startIndex ?? 0),
+    endIndex: Number(overrides.endIndex ?? -1),
+    startTimeUs: Number(overrides.startTimeSeconds ?? 0) * 1_000_000,
+    endTimeUs: Number(overrides.endTimeSeconds ?? -1) >= 0
+      ? Number(overrides.endTimeSeconds) * 1_000_000
+      : undefined,
+    frameType: String(overrides.frameType ?? 'all') as never,
+    limit: Number(overrides.limit ?? -1),
+    order: 'presentation',
+  });
 }
 
 function sample(

@@ -12,7 +12,7 @@ export const streamOverviewNode: NodeDefinition<
   { tracks: 'track_list' }
 > = {
   id: 'stream_overview',
-  category: 'display',
+  category: 'inspect',
   displayName: 'Stream Overview',
   description: 'Display the container summary and every parsed media track.',
   inputs: {

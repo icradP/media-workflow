@@ -1,5 +1,4 @@
-import type { NodeDefinition } from '@media-workflow/core';
-import type { MediaAsset, MediaSample } from '@media-workflow/core';
+import type { MediaSelection, NodeDefinition } from '@media-workflow/core';
 
 /**
  * FrameTable — 从解析结果提取帧列表，供 UI viewport 渲染表格。
@@ -8,35 +7,23 @@ import type { MediaAsset, MediaSample } from '@media-workflow/core';
  * Outputs: frames
  */
 export const frameTableNode: NodeDefinition<
-  { asset: 'media_asset'; samples: 'media_samples' },
-  { samples: 'media_samples' }
+  { selection: 'media_selection' },
+  { selection: 'media_selection' }
 > = {
-  id: 'frame_table',
-  category: 'display',
+  id: 'sample_table',
+  category: 'inspect',
   displayName: 'Frame Table',
   description: 'Display frame metadata as an interactive table.',
   inputs: {
-    asset: { type: 'media_asset', label: 'Media Asset', optional: true },
-    samples: { type: 'media_samples', label: 'Selected Frames', optional: true },
+    selection: { type: 'media_selection', label: 'Media Selection' },
   },
   outputs: {
-    samples: { type: 'media_samples', label: 'Samples' },
+    selection: { type: 'media_selection', label: 'Selection' },
   },
-  params: {
-    trackId: { name: 'trackId', type: 'string', default: '' },
-  },
-  async execute(ctx, { inputs, params }) {
-    const asset = inputs.asset as MediaAsset | undefined;
-    const selectedSamples = inputs.samples as MediaSample[] | undefined;
-    if (!asset && !selectedSamples) {
-      throw new Error('FrameTable: connect a media asset or selected frames');
-    }
-    const trackId = String(params.trackId ?? '').trim();
-    const sourceSamples = selectedSamples ?? asset?.samples ?? [];
-    const samples = trackId
-      ? sourceSamples.filter(sample => sample.trackId === trackId)
-      : sourceSamples;
-    ctx.log.info(`FrameTable: ${samples.length} samples`);
-    return { samples };
+  async execute(ctx, { inputs }) {
+    const selection = inputs.selection as MediaSelection | undefined;
+    if (!selection) throw new Error('SampleTable: media selection is required');
+    ctx.log.info(`SampleTable: ${selection.samples.length} samples`);
+    return { selection };
   },
 };

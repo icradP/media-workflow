@@ -72,7 +72,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -82,7 +83,7 @@ button {
 
 #app {
   --palette-width: 248px;
-  --inspector-width: 280px;
+  --inspector-width: 320px;
   --results-height: clamp(220px, 32vh, 380px);
   display: grid;
   grid-template:
@@ -99,6 +100,9 @@ button {
 
 .topbar {
   grid-area: topbar;
+  position: sticky;
+  top: 0;
+  left: 0;
   z-index: 20;
   display: flex;
   align-items: center;
@@ -156,6 +160,50 @@ button {
 
 .topbar-actions {
   gap: 8px;
+  flex: 0 0 auto;
+}
+
+.workflow-toolbar {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.workflow-preset {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.workflow-preset__label {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.workflow-preset select {
+  width: clamp(150px, 20vw, 260px);
+  height: 34px;
+  padding: 0 30px 0 10px;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.workflow-preset__description {
+  max-width: 240px;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .button {
@@ -729,12 +777,111 @@ body.panel-resizing {
   border-left: 1px solid var(--border);
 }
 
+.panel--floating#properties {
+  top: 72px;
+  right: 16px;
+  width: 320px;
+  max-height: calc(100vh - 88px);
+  background: var(--surface);
+}
+
 .inspector-body {
   padding: 14px;
 }
 
 .inspector-section {
   margin-top: 8px;
+}
+
+.inspector-section--node {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspector-section--node.is-hidden {
+  display: none;
+}
+
+#node-inspector-empty.is-hidden {
+  display: none;
+}
+
+.node-inspector__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.node-inspector__title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.node-inspector__meta {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.node-inspector__summary {
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.node-inspector__hint {
+  margin: 8px 0 0;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.node-inspector__form {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.node-inspector__field {
+  display: grid;
+  gap: 6px;
+}
+
+.node-inspector__field-label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.node-inspector__control {
+  width: 100%;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  outline: none;
+}
+
+.node-inspector__control:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.node-inspector__field-note {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.node-inspector__empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 .inspector-section h4 {
@@ -1139,6 +1286,10 @@ kbd {
   #app[data-inspector-mode="docked"] #properties:not(.panel--floating) {
     display: none;
   }
+
+  .workflow-preset__description {
+    display: none;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1164,8 +1315,13 @@ kbd {
 
   .brand-copy span,
   .button .shortcut,
-  #save-workflow-button {
+  .workflow-preset__label {
     display: none;
+  }
+
+  .panel--floating#properties {
+    right: 8px;
+    width: min(320px, calc(100vw - 16px));
   }
 }
 

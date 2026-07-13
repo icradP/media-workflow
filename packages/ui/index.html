@@ -17,7 +17,23 @@
         </div>
       </div>
 
+      <div class="workflow-toolbar" aria-label="工作流">
+        <label class="workflow-preset">
+          <span class="workflow-preset__label">预设</span>
+          <select id="workflow-preset-select" aria-label="工作流预设"></select>
+        </label>
+        <button id="load-workflow-preset-button" class="button" type="button">载入预设</button>
+        <span id="workflow-preset-description" class="workflow-preset__description"></span>
+      </div>
+
       <div class="topbar-actions">
+        <input id="load-workflow-input" type="file" accept=".json,application/json" hidden />
+        <button id="load-workflow-button" class="button" type="button">
+          <svg class="button__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/>
+          </svg>
+          加载
+        </button>
         <button id="theme-toggle-button" class="button button--icon" type="button" aria-label="切换到浅色模式" title="切换明暗主题">
           <svg class="theme-icon theme-icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
             <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/>
@@ -30,7 +46,7 @@
           <svg class="button__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
             <path d="M5 3h12l2 2v16H5V3Z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>
           </svg>
-          保存
+          保存到本地
           <span class="shortcut">⌘S</span>
         </button>
         <button id="run-workflow-button" class="button button--primary" type="button">
@@ -58,39 +74,15 @@
     </aside>
 
     <main id="canvas-wrap" aria-label="工作流画布">
-      <div class="canvas-hint">右键空白处添加节点 · 在 File Loader 节点内选择文件 · 滚轮缩放 · 空格拖动画布</div>
+      <div class="canvas-hint">右键空白处添加节点 · 选中节点后在检查器编辑参数 · 滚轮缩放 · 空格拖动画布</div>
     </main>
 
-    <aside id="properties" class="sidebar">
+    <aside id="properties" class="sidebar inspector-window">
       <div class="panel-header">
         <h3 class="panel-title">检查器</h3>
       </div>
       <div class="inspector-body">
-        <section class="inspector-section">
-          <h4>工作流预设</h4>
-          <label class="preset-field">
-            <span class="preset-field__label">选择模板</span>
-            <select id="workflow-preset-select" aria-label="工作流预设"></select>
-          </label>
-          <p id="workflow-preset-description" class="preset-description"></p>
-          <button id="load-workflow-preset-button" class="button button--block" type="button">
-            载入预设
-          </button>
-        </section>
-
-        <section class="inspector-section">
-          <h4>快捷操作</h4>
-          <div class="shortcut-list">
-            <div class="shortcut-row"><span>运行工作流</span><kbd>⌘ ↵</kbd></div>
-            <div class="shortcut-row"><span>保存工作流</span><kbd>⌘ S</kbd></div>
-            <div class="shortcut-row"><span>删除节点</span><kbd>⌫</kbd></div>
-          </div>
-        </section>
-
-        <section class="inspector-section">
-          <h4>使用提示</h4>
-          <p class="viewport-note">从左侧拖入节点并连接端口。点击 File Loader 节点内的按钮选择媒体文件。</p>
-        </section>
+        <p id="node-inspector-empty" class="node-inspector__empty">选择节点后在此编辑详细配置。</p>
       </div>
     </aside>
 

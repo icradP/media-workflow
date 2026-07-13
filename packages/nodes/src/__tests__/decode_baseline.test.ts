@@ -52,13 +52,10 @@ describe('decode workflow design', () => {
     expect([...graph.nodes.keys()]).toEqual([
       'file',
       'analyze',
-      'select-video',
-      'request-frame',
       'decode-video',
-      'select-decoded',
-      'preview-yuv',
+      'preview-video',
     ]);
-    expect(graph.edges).toHaveLength(7);
+    expect(graph.edges).toHaveLength(3);
   });
 });
 

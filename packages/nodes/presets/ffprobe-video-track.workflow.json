@@ -7,14 +7,14 @@
     { "id": "analyze", "type": "auto_analyze", "position": [300, 180] },
     {
       "id": "track",
-      "type": "track_selector",
+      "type": "track_select",
       "position": [580, 80],
       "params": { "kind": "video", "index": 0 }
     },
     { "id": "detail", "type": "track_detail", "position": [900, 20] },
     {
       "id": "select-frames",
-      "type": "frame_selector",
+      "type": "media_select",
       "position": [880, 260],
       "params": {
         "startIndex": 0,
@@ -25,7 +25,7 @@
         "limit": 1
       }
     },
-    { "id": "frame-table", "type": "frame_table", "position": [1220, 190] },
+    { "id": "frame-table", "type": "sample_table", "position": [1220, 190] },
     {
       "id": "frame-hex",
       "type": "hex_view",
@@ -51,35 +51,28 @@
     {
       "id": "track-detail",
       "sourceNodeId": "track",
-      "sourceOutput": "track",
+      "sourceOutput": "selectedTrack",
       "targetNodeId": "detail",
-      "targetInput": "track"
-    },
-    {
-      "id": "analyze-select-frames",
-      "sourceNodeId": "analyze",
-      "sourceOutput": "asset",
-      "targetNodeId": "select-frames",
-      "targetInput": "asset"
+      "targetInput": "selectedTrack"
     },
     {
       "id": "track-select-frames",
       "sourceNodeId": "track",
-      "sourceOutput": "track",
+      "sourceOutput": "selectedTrack",
       "targetNodeId": "select-frames",
-      "targetInput": "track"
+      "targetInput": "source"
     },
     {
       "id": "frames-table",
       "sourceNodeId": "select-frames",
-      "sourceOutput": "samples",
+      "sourceOutput": "selection",
       "targetNodeId": "frame-table",
-      "targetInput": "samples"
+      "targetInput": "selection"
     },
     {
       "id": "frames-hex",
       "sourceNodeId": "select-frames",
-      "sourceOutput": "samples",
+      "sourceOutput": "selection",
       "targetNodeId": "frame-hex",
       "targetInput": "bytes"
     }

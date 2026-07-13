@@ -71,6 +71,13 @@ export interface NodeDefinition<
 
 export type NodeCategory =
   | 'source'
+  | 'analyze'
+  | 'select'
+  | 'decode'
+  | 'inspect'
+  | 'transform'
+  | 'export'
+  // Internal/legacy implementation categories kept for non-palette backends.
   | 'parser'
   | 'demux'
   | 'decoder'

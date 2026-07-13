@@ -3,6 +3,11 @@ import type { LGraph, LGraphCanvas } from 'litegraph.js';
 
 const CATEGORY_COLORS: Record<string, string> = {
   source: '#4ecdc4',
+  analyze: '#7c5cff',
+  select: '#ff9f43',
+  decode: '#54a0ff',
+  inspect: '#feca57',
+  transform: '#10ac84',
   parser: '#7c5cff',
   demux: '#ff9f43',
   decoder: '#54a0ff',

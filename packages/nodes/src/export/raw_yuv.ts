@@ -6,7 +6,7 @@ export const rawYuvExporterNode: NodeDefinition<
   { file: 'media_file' }
 > = {
   id: 'raw_yuv_exporter',
-  category: 'utility',
+  category: 'export',
   displayName: 'Raw YUV Exporter',
   description: 'Export a decoded frame as raw .yuv bytes.',
   inputs: {

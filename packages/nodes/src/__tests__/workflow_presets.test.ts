@@ -8,6 +8,7 @@ import {
   executeGraph,
   type CodecFamily,
   type MediaAsset,
+  type MediaSelection,
   type MediaSource,
   type MediaTrack,
   type NodeDefinition,
@@ -59,13 +60,11 @@ describe('FFprobe workflow presets', () => {
     const results = await runPreset(overviewPreset, source);
     const asset = results.get('analyze')?.get('asset') as MediaAsset;
     const tracks = results.get('overview')?.get('tracks') as MediaTrack[];
-    const frameSamples = results.get('frames')?.get('samples');
     const hexPreview = JSON.parse(String(results.get('raw-hex')?.get('preview')));
 
     expect(asset.source.size).toBe(record.input.size);
     expect(asset.tracks).toHaveLength(record.expected.streamCount);
     expect(tracks).toBe(asset.tracks);
-    expect(frameSamples).toBe(asset.samples);
     expect(hexPreview.byteLength).toBe(Math.min(256, source.size));
     expect(asset.container.format).toBe(expectedFormat(record.expected.format.name));
 
@@ -85,13 +84,15 @@ describe('FFprobe workflow presets', () => {
     const source = sourceFromRecord(record);
     const preset = stream.kind === 'video' ? videoPreset : audioPreset;
     const results = await runPreset(preset, source);
-    const track = results.get('track')?.get('track') as MediaTrack;
+    const selectedTrack = results.get('track')?.get('selectedTrack') as { track: MediaTrack };
+    const track = selectedTrack.track;
     const asset = results.get('analyze')?.get('asset') as MediaAsset;
-    const selectedFrames = results.get('select-frames')?.get('samples') as Array<{
+    const selection = results.get('select-frames')?.get('selection') as MediaSelection;
+    const selectedFrames = selection.samples as Array<{
       trackId: string;
       data?: Uint8Array;
     }>;
-    const frameTable = results.get('frame-table')?.get('samples');
+    const frameTable = results.get('frame-table')?.get('selection');
     const hexPreview = JSON.parse(String(results.get('frame-hex')?.get('preview')));
 
     expect(track.kind).toBe(stream.kind);
@@ -104,7 +105,7 @@ describe('FFprobe workflow presets', () => {
       : Math.min(50, available.length);
     expect(selectedFrames).toHaveLength(expectedSelectionCount);
     expect(selectedFrames.every(sample => sample.trackId === track.trackId)).toBe(true);
-    expect(frameTable).toBe(selectedFrames);
+    expect(frameTable).toBe(selection);
     const expectedBytes = selectedFrames
       .map(sample => sample.data?.byteLength ?? 0)
       .reduce((total, length) => total + length, 0);

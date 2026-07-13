@@ -13,7 +13,7 @@ export const autoAnalyzeNode: NodeDefinition<
   { asset: 'media_asset'; probe: 'media_probe' }
 > = {
   id: 'auto_analyze',
-  category: 'parser',
+  category: 'analyze',
   displayName: 'Auto Analyze',
   description: 'Probe the container and normalize tracks and samples into a MediaAsset.',
   inputs: {

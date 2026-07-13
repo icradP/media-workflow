@@ -1,7 +1,15 @@
 import type { NodeDefinition, NodeParamDef } from '@media-workflow/core';
 import { LiteGraph } from 'litegraph.js';
+import { frameSelectorNodeHeight, frameSelectorNodeWidth } from './frame_selector_ui.js';
+
+const NODES_WITH_CUSTOM_UI = new Set([
+  'media_select',
+  'video_decode',
+  'audio_decode',
+]);
 
 interface WidgetHostNode {
+  id: number;
   properties: Record<string, unknown>;
   addWidget: (
     type: string,
@@ -18,18 +26,29 @@ interface WidgetHostNode {
   ) => void;
 }
 
+export function initNodeParamDefaults(
+  node: WidgetHostNode,
+  nodeDef: NodeDefinition,
+): void {
+  for (const [paramKey, param] of Object.entries(nodeDef.params ?? {})) {
+    node.properties[paramKey] = param.default;
+  }
+}
+
 export function attachNodeParamWidgets(
   node: WidgetHostNode,
   nodeDef: NodeDefinition,
-  onParamChange?: () => void,
+  onParamChange?: (nodeId: string) => void,
 ): void {
+  if (NODES_WITH_CUSTOM_UI.has(nodeDef.id)) return;
+
   const params = Object.entries(nodeDef.params ?? {});
   if (params.length === 0) return;
 
   node.onWidgetChanged = (name, value) => {
     const key = resolvePropertyKey(nodeDef, name);
     if (key) node.properties[key] = value;
-    onParamChange?.();
+    onParamChange?.(String(node.id));
   };
 
   for (const [paramKey, param] of params) {
@@ -47,6 +66,7 @@ export function attachNodeParamWidgets(
 }
 
 export function preferredNodeWidth(nodeDef: NodeDefinition): number {
+  if (NODES_WITH_CUSTOM_UI.has(nodeDef.id)) return frameSelectorNodeWidth();
   const labels = Object.values(nodeDef.params ?? {}).map(widgetLabel);
   const longest = labels.reduce((max, label) => Math.max(max, label.length), 0);
   const paramCount = Object.keys(nodeDef.params ?? {}).length;
@@ -96,6 +116,7 @@ function resolvePropertyKey(
 }
 
 export function minimumDisplayNodeHeight(nodeDef: NodeDefinition): number {
+  if (NODES_WITH_CUSTOM_UI.has(nodeDef.id)) return frameSelectorNodeHeight();
   const widgetCount = Object.keys(nodeDef.params ?? {}).length;
   const slotCount = Object.keys(nodeDef.inputs).length + Object.keys(nodeDef.outputs).length;
   const widgetHeight = widgetCount * (LiteGraph.NODE_WIDGET_HEIGHT + 4) + 8;

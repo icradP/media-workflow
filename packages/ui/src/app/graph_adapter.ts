@@ -18,6 +18,7 @@ import {
 interface LGraphNodeLike {
   id: number;
   type: string;
+  pos?: [number, number];
   inputs?: Array<{ name: string; link?: number | null }>;
   outputs?: Array<{ name: string; links?: number[] | null }>;
   properties?: Record<string, unknown>;
@@ -51,6 +52,25 @@ export interface ExtractedWorkflow {
   graph: WorkflowGraph;
   /** canvas node id → node definition id (e.g. "file_loader") */
   nodeTypes: Map<string, string>;
+}
+
+export function exportWorkflowPresetFromLGraph(
+  graph: LGraph,
+  name = 'Local workflow',
+): WorkflowPreset {
+  const internal = asGraphInternal(graph);
+  return {
+    version: 1,
+    name,
+    description: 'Saved from Media Flow',
+    nodes: internal._nodes.map(node => ({
+      id: String(node.id),
+      type: node.type.replace(/^media\//, ''),
+      position: node.pos ? [node.pos[0], node.pos[1]] : undefined,
+      params: { ...node.properties },
+    })),
+    edges: extractEdges(internal),
+  };
 }
 
 function wrapFileLoader(

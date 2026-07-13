@@ -1,8 +1,10 @@
 import type {
   AudioMediaTrack,
   MediaAsset,
+  MediaSelection,
   MediaSample,
   MediaTrack,
+  SelectedTrack,
   NodeExecutionEvent,
   VideoMediaTrack,
 } from '@media-workflow/core';
@@ -14,10 +16,10 @@ const renderers = new Map<string, NodeRenderer>([
   ['auto_analyze', renderAutoAnalyze],
   ['stream_overview', renderStreamOverview],
   ['track_detail', renderTrackDetailEvent],
-  ['frame_table', renderSampleTableEvent],
-  ['frame_selector', renderSampleTableEvent],
+  ['sample_table', renderSampleTableEvent],
+  ['media_select', renderSampleTableEvent],
   ['hex_view', renderHexEvent],
-  ['yuv_preview', renderYuvPreviewEvent],
+  ['video_preview', renderYuvPreviewEvent],
   ['file_export', renderFileExportEvent],
 ]);
 
@@ -172,13 +174,13 @@ function renderStreamOverview(event: NodeExecutionEvent, element: HTMLElement): 
 }
 
 function renderTrackDetailEvent(event: NodeExecutionEvent, element: HTMLElement): void {
-  const track = event.inputs.track as MediaTrack | undefined;
-  if (track) renderTrackDetail(track, element);
+  const selectedTrack = event.inputs.selectedTrack as SelectedTrack | undefined;
+  if (selectedTrack) renderTrackDetail(selectedTrack.track, element);
 }
 
 function renderSampleTableEvent(event: NodeExecutionEvent, element: HTMLElement): void {
-  const samples = event.outputs.samples as MediaSample[] | undefined;
-  if (samples) renderSampleTable(samples, element);
+  const selection = event.outputs.selection as MediaSelection | undefined;
+  if (selection) renderSampleTable(selection.samples, element);
 }
 
 function renderHexEvent(event: NodeExecutionEvent, element: HTMLElement): void {
@@ -220,13 +222,17 @@ function renderYuvPreviewEvent(event: NodeExecutionEvent, element: HTMLElement):
       <canvas id="${canvasId}" class="viewport-canvas" width="${preview.displayWidth}" height="${preview.displayHeight}"></canvas>
       <p class="viewport-note">Canvas rendering uses the decoded frame from the upstream decoder output.</p>
     `;
-    const frame = event.inputs.frame as {
+    const video = event.inputs.video as { frames?: Array<{
       format?: string;
       displayWidth?: number;
       displayHeight?: number;
       planes?: Uint8Array[];
       strides?: number[];
-    } | undefined;
+    }> } | undefined;
+    const requested = Math.max(0, Math.floor(Number(event.params.frameIndex) || 0));
+    const frame = video?.frames?.[
+      Math.min(Math.max(0, (video.frames?.length ?? 1) - 1), requested)
+    ];
     if (frame?.planes && frame.displayWidth && frame.displayHeight) {
       renderI420ToCanvas(
         document.getElementById(canvasId) as HTMLCanvasElement | null,

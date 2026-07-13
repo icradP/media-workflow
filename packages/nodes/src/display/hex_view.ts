@@ -13,7 +13,7 @@ export const hexViewNode: NodeDefinition<
   { preview: 'string' }
 > = {
   id: 'hex_view',
-  category: 'display',
+  category: 'inspect',
   displayName: 'Hex View',
   description: 'Display raw bytes in hexadecimal format with offset/ASCII columns.',
   inputs: {
@@ -76,6 +76,17 @@ export function extractByteView(value: ByteData): ExtractedByteView {
       data: concatenate(chunks),
       baseOffset: value[0]?.offset ?? 0,
       sourceType: `MediaSample[${value.length}]`,
+    };
+  }
+
+  if ('selectionId' in value && 'samples' in value && Array.isArray(value.samples)) {
+    const chunks = value.samples
+      .map(sample => sample.data)
+      .filter((data): data is Uint8Array => data instanceof Uint8Array);
+    return {
+      data: concatenate(chunks),
+      baseOffset: value.samples[0]?.offset ?? 0,
+      sourceType: `MediaSelection[${value.samples.length}]`,
     };
   }
 
