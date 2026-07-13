@@ -1,4 +1,5 @@
 import type {
+  DecodedVideoPixelFormat,
   DecodedVideoFrame,
   DecodedVideoFrameSet,
   NodeDefinition,
@@ -6,14 +7,19 @@ import type {
 } from '@media-workflow/core';
 import {
   DECODE_LIMITS,
+  DEFAULT_VIDEO_OUTPUT_FORMAT,
   WEBCODECS_H264_BACKEND,
 } from '@media-workflow/core/decoder';
 import {
   adaptPacketForDecoder,
-  copyVideoFrameToI420,
+  copyVideoFrame,
   isWebCodecsAvailable,
   resolveVideoFrameSampleId,
 } from '@media-workflow/codec';
+
+const SUPPORTED_OUTPUT_FORMATS = WEBCODECS_H264_BACKEND.outputFormats.filter(
+  (format): format is DecodedVideoPixelFormat => format !== 'f32-planar',
+);
 
 export const webcodecsVideoDecoderNode: NodeDefinition<
   { request: 'video_decode_request' },
@@ -29,10 +35,24 @@ export const webcodecsVideoDecoderNode: NodeDefinition<
   outputs: {
     frames: { type: 'decoded_video_frames', label: 'Decoded Frames' },
   },
+  params: {
+    outputFormat: {
+      name: 'outputFormat',
+      type: 'enum',
+      default: DEFAULT_VIDEO_OUTPUT_FORMAT,
+      values: [...SUPPORTED_OUTPUT_FORMATS],
+    },
+  },
   worker: 'decoder',
-  async execute(ctx, { inputs }) {
+  async execute(ctx, { inputs, params }) {
     const request = inputs.request as VideoDecodeRequest | undefined;
     if (!request) throw new Error('WebCodecsVideoDecoder: request is required');
+    const outputFormat = String(params.outputFormat ?? DEFAULT_VIDEO_OUTPUT_FORMAT) as DecodedVideoPixelFormat;
+    if (!SUPPORTED_OUTPUT_FORMATS.includes(outputFormat)) {
+      throw new Error(
+        `WebCodecsVideoDecoder: output format ${outputFormat} is not supported by ${WEBCODECS_H264_BACKEND.id}`,
+      );
+    }
     if (!isWebCodecsAvailable()) {
       throw new Error('WebCodecsVideoDecoder: WebCodecs is not available in this environment');
     }
@@ -97,7 +117,7 @@ export const webcodecsVideoDecoderNode: NodeDefinition<
     const decodedFrames: DecodedVideoFrame[] = [];
     for (const pending of pendingFrames) {
       try {
-        decodedFrames.push(await copyVideoFrameToI420(pending.frame, pending.sourceSampleId));
+        decodedFrames.push(await copyVideoFrame(pending.frame, pending.sourceSampleId, outputFormat));
       } finally {
         pending.frame.close();
       }

@@ -4,6 +4,7 @@ import type { WorkflowGraph } from '../graph/graph.js';
 import { createMemoryCache, stableFingerprint } from '../runtime/cache.js';
 import { executeGraph } from '../runtime/scheduler.js';
 import { validateWorkflowGraph } from '../graph/validate.js';
+import { analyzeRunnableWorkflow } from '../graph/runnable.js';
 
 const sourceNode: NodeDefinition<Record<string, never>, { value: 'number' }> = {
   id: 'source',
@@ -84,5 +85,51 @@ describe('workflow runtime protocol', () => {
 
     expect(first).toBe(same);
     expect(changed).not.toBe(first);
+  });
+
+  it('executes only runnable nodes when runnableNodeIds is provided', async () => {
+    const orphanSink: NodeDefinition<{ value: 'number' }, { label: 'string' }> = {
+      id: 'orphan',
+      category: 'display',
+      displayName: 'Orphan',
+      inputs: { value: { type: 'number', label: 'Value' } },
+      outputs: { label: { type: 'string', label: 'Label' } },
+      async execute() {
+        return { label: 'should-not-run' };
+      },
+    };
+
+    const graph: WorkflowGraph = {
+      version: 1,
+      nodes: new Map<string, NodeDefinition>([
+        ['source', sourceNode as NodeDefinition],
+        ['sink', sinkNode as NodeDefinition],
+        ['orphan', orphanSink as NodeDefinition],
+      ]),
+      edges: [{
+        id: 'edge',
+        sourceNodeId: 'source',
+        sourceOutput: 'value',
+        targetNodeId: 'sink',
+        targetInput: 'value',
+      }],
+    };
+
+    const { runnableNodeIds } = analyzeRunnableWorkflow(graph);
+    const events: string[] = [];
+
+    const results = await executeGraph(
+      graph,
+      createMemoryCache(),
+      new AbortController().signal,
+      event => {
+        events.push(event.nodeId);
+      },
+      { runnableNodeIds },
+    );
+
+    expect(events).toEqual(['source', 'sink']);
+    expect(results.has('orphan')).toBe(false);
+    expect(results.get('sink')?.get('label')).toBe('value=42');
   });
 });

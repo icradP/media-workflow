@@ -1,24 +1,9 @@
 /**
- * Layout initialization — handles canvas resize and global setup.
+ * Layout initialization — canvas sizing is handled by canvas_layout.ts.
  */
 
-export function initLayout() {
-  const canvasWrap = document.getElementById('canvas-wrap');
-  if (!canvasWrap) return;
-
-  // Make canvas fill the container
-  const resize = () => {
-    const rect = canvasWrap.getBoundingClientRect();
-    const canvas = canvasWrap.querySelector('canvas');
-    if (canvas) {
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-    }
-  };
-
-  window.addEventListener('resize', resize);
-  // Initial resize after mount
-  setTimeout(resize, 100);
+export function initLayout(): void {
+  // Reserved for future global layout hooks.
 }
 
 if (typeof document !== 'undefined') {

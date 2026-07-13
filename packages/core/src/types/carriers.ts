@@ -203,7 +203,6 @@ export interface VideoDecodeRequest {
   decoderConfig: DecoderConfig;
   decodePackets: EncodedPacket[];
   targetSampleIds: string[];
-  outputFormat: DecodedVideoPixelFormat;
   diagnostics: MediaDiagnostic[];
 }
 

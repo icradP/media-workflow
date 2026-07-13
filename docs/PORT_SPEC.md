@@ -272,7 +272,7 @@ NAL payload 不包含 Annex-B start code 或长度前缀时，必须在 metadata
 
 ### 4.7 `video_decode_request`
 
-表示视频解码规划结果，包含完整 GOP 依赖包和目标 sample ID 列表。
+表示视频解码规划结果，包含完整 GOP 依赖包和目标 sample ID 列表。只描述「解哪些包」，不包含输出像素格式。
 
 ### 4.8 `audio_decode_request`
 

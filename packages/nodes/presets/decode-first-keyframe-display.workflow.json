@@ -21,14 +21,14 @@
         "startTimeSeconds": 0,
         "endTimeSeconds": -1,
         "frameType": "key",
-        "limit": 1,
-        "outputFormat": "I420"
+        "limit": 1
       }
     },
     {
       "id": "decode-video",
       "type": "webcodecs_video_decoder",
-      "position": [1200, 120]
+      "position": [1200, 120],
+      "params": { "outputFormat": "I420" }
     },
     {
       "id": "select-decoded",

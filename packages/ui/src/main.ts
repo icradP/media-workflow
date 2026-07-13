@@ -3,6 +3,7 @@
  */
 
 import { createApp } from './app/app.js';
+import { initPanelDock } from './app/panel_dock.js';
 import './app/layout.js';
 import './app/styles.css';
 
@@ -10,6 +11,8 @@ const storedTheme = localStorage.getItem('media-workflow-theme');
 const preferredTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 document.documentElement.dataset.theme =
   storedTheme === 'light' || storedTheme === 'dark' ? storedTheme : preferredTheme;
+
+initPanelDock();
 
 const app = createApp();
 app.mount().catch(err => {

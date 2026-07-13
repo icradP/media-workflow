@@ -2,7 +2,6 @@ import type {
   MediaAsset,
   MediaTrack,
   NodeDefinition,
-  VideoDecodeRequest,
   VideoMediaTrack,
 } from '@media-workflow/core';
 import { planVideoDecodeRequest } from '@media-workflow/codec';
@@ -46,12 +45,6 @@ export const videoFrameRequestNode: NodeDefinition<
       values: ['all', 'key'],
     },
     limit: { name: 'limit', type: 'number', default: 1, min: -1, step: 1 },
-    outputFormat: {
-      name: 'outputFormat',
-      type: 'enum',
-      default: 'I420',
-      values: ['I420', 'NV12', 'RGBA8', 'BGRA8'],
-    },
   },
   worker: 'decoder',
   async execute(ctx, { inputs, params }) {
@@ -74,7 +67,6 @@ export const videoFrameRequestNode: NodeDefinition<
       decoderConfig: track.decoderConfig,
       samples: asset.samples,
       containerFormat: asset.container.format,
-      outputFormat: String(params.outputFormat ?? 'I420') as VideoDecodeRequest['outputFormat'],
       selection: {
         startIndex: Math.max(0, Math.floor(Number(params.startIndex) || 0)),
         endIndex: endIndexParam,

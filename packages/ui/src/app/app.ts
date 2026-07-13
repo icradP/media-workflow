@@ -3,8 +3,24 @@
  */
 
 import { LGraph, LGraphCanvas, LiteGraph } from 'litegraph.js';
+import { installInlineNodeWidgetEditor } from './node_widget_editor.js';
+import { bindGraphCanvas } from './canvas_layout.js';
+import { installCanvasNodeMenu } from './canvas_node_menu.js';
+import {
+  attachExecutionHighlight,
+  clearNodeExecutionStates,
+  clearNodeExecutionIgnored,
+  collectIgnoredNodeIds,
+  markNodeExecutionFailed,
+  setNodesExecutionIgnored,
+} from './node_execution_state.js';
+import {
+  attachNodeParamWidgets,
+  minimumDisplayNodeHeight,
+  preferredNodeWidth,
+} from './node_widgets.js';
 import { nodesByCategory, allNodes, WORKFLOW_PRESET_CATALOG, DEFAULT_WORKFLOW_PRESET_ID } from '@media-workflow/nodes';
-import { graphToJSON, createMemoryCache, executeGraph } from '@media-workflow/core';
+import { graphToJSON, createMemoryCache, executeGraph, analyzeRunnableWorkflow } from '@media-workflow/core';
 import type { ExecutionCache, NodeExecutionEvent } from '@media-workflow/core';
 import { extractWorkflowFromLGraph, loadWorkflowPresetIntoLGraph } from './graph_adapter.js';
 import { clearViewport, renderExecutionEvent } from './viewport.js';
@@ -136,8 +152,9 @@ function applyComputedNodeSize(
   nodeDef: (typeof allNodes)[number],
 ): void {
   const computed = node.computeSize();
-  const width = Math.max(computed[0], nodeDef.id === 'file_loader' ? 220 : 0);
-  const height = computed[1];
+  const width = Math.max(computed[0], preferredNodeWidth(nodeDef));
+  const minHeight = minimumDisplayNodeHeight(nodeDef);
+  const height = Math.max(computed[1], minHeight);
 
   if (nodeDef.category === 'display') {
     node.size = [Math.max(width, 280), height + 156];
@@ -147,7 +164,10 @@ function applyComputedNodeSize(
   node.size = [width, height];
 }
 
-export function registerNodeTypes(options: RegisterNodeTypeOptions = {}) {
+export function registerNodeTypes(
+  options: RegisterNodeTypeOptions = {},
+  onParamChange?: () => void,
+) {
   configureLiteGraphLayout();
   const canvasClass = LGraphCanvas as unknown as {
     link_type_colors: Record<string, string>;
@@ -196,27 +216,12 @@ export function registerNodeTypes(options: RegisterNodeTypeOptions = {}) {
           options.onRequestFile?.(this);
         });
       }
-      for (const [paramName, param] of Object.entries(nodeDef.params ?? {})) {
-        this.properties[paramName] = param.default;
-        const widgetType = param.type === 'boolean'
-          ? 'toggle'
-          : param.type === 'enum'
-            ? 'combo'
-            : param.type === 'string'
-              ? 'text'
-              : 'number';
-        const widgetOptions = param.type === 'enum'
-          ? { values: param.values }
-          : param.type === 'number'
-            ? { min: param.min, max: param.max, step: param.step }
-            : {};
-        this.addWidget(widgetType, paramName, param.default, value => {
-          this.properties[paramName] = value;
-        }, widgetOptions);
-      }
+      attachNodeParamWidgets(this as never, nodeDef, onParamChange);
       if (nodeDef.category === 'display') {
         this.displayPreview = ['等待分析结果…'];
-        this.onDrawForeground = context => drawDisplayPreview(this, context);
+        attachExecutionHighlight(this, context => drawDisplayPreview(this, context));
+      } else {
+        attachExecutionHighlight(this);
       }
       applyComputedNodeSize(this, nodeDef);
       this.onExecute = () => {
@@ -441,8 +446,6 @@ export function createApp(): MediaWorkflowApp {
   let isRunning = false;
 
   async function mount() {
-    registerNodeTypes({ onRequestFile: openFilePickerForNode });
-
     graph = new LGraph();
     execCache = createMemoryCache();
 
@@ -453,6 +456,32 @@ export function createApp(): MediaWorkflowApp {
     canvas = new LGraphCanvas(canvasElement, graph);
     canvas.background_image = '';
     canvas.render_canvas_border = false;
+    bindGraphCanvas(canvas);
+
+    registerNodeTypes(
+      { onRequestFile: openFilePickerForNode },
+      () => execCache.clear(),
+    );
+    installInlineNodeWidgetEditor(canvas, canvasWrap, {
+      onValueChange: () => execCache.clear(),
+    });
+    installCanvasNodeMenu(canvas, {
+      categories: nodesByCategory(),
+      onAddNode: addNodeAtGraphPosition,
+      getSelectedNodeIds: () => getSelectedCanvasNodeIds(canvas),
+      onSetNodesIgnored: (nodeIds, ignored) => {
+        const updated = setNodesExecutionIgnored(graph, nodeIds, ignored);
+        if (updated.length === 0) return;
+        canvas.setDirty(true, true);
+        setStatus(
+          ignored
+            ? `已忽略 ${updated.length} 个节点 · 运行时将跳过`
+            : `已恢复 ${updated.length} 个节点 · 将参与执行`,
+          'idle',
+        );
+      },
+    });
+
     graph.start();
 
     setupFilePicker();
@@ -511,6 +540,8 @@ export function createApp(): MediaWorkflowApp {
 
     filesByNode.clear();
     execCache.clear();
+    clearNodeExecutionStates(graph);
+    clearNodeExecutionIgnored(graph);
     clearViewport();
     renderEmptyViewport();
 
@@ -668,12 +699,19 @@ export function createApp(): MediaWorkflowApp {
     });
   }
 
-  function addNodeToCanvas(nodeId: string) {
+  function addNodeAtGraphPosition(nodeId: string, graphPos: [number, number]): void {
     const typeName = `media/${nodeId}`;
-    const node = LiteGraph.createNode(typeName) as unknown as LGraphNodeBase & { id: number };
-    node.pos = [200 + Math.random() * 300, 100 + Math.random() * 200];
+    const node = LiteGraph.createNode(typeName) as unknown as LGraphNodeBase & {
+      id: number;
+      pos: [number, number];
+    };
+    node.pos = [graphPos[0] - 60, graphPos[1] - 20];
     (graph as { add(node: unknown): void }).add(node);
     canvas.setDirty(true, true);
+  }
+
+  function addNodeToCanvas(nodeId: string) {
+    addNodeAtGraphPosition(nodeId, [200 + Math.random() * 300, 100 + Math.random() * 200]);
   }
 
   function setupCanvasDrop(canvasWrap: HTMLElement) {
@@ -692,14 +730,10 @@ export function createApp(): MediaWorkflowApp {
 
       const nodeId = e.dataTransfer!.getData('application/node-id');
       if (nodeId) {
-        const rect = canvasWrap.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        const typeName = `media/${nodeId}`;
-        const node = LiteGraph.createNode(typeName) as unknown as LGraphNodeBase & { id: number; pos: [number, number] };
-        node.pos = [x - 60, y - 20];
-        (graph as { add(node: unknown): void }).add(node);
-        canvas.setDirty(true, true);
+        const graphPos = canvas.convertEventToCanvasOffset(
+          e as unknown as MouseEvent,
+        ) as [number, number];
+        addNodeAtGraphPosition(nodeId, graphPos);
       }
     });
   }
@@ -745,40 +779,87 @@ export function createApp(): MediaWorkflowApp {
       return;
     }
 
-    const disconnectedInputs = findDisconnectedRequiredInputs(workflow);
-    if (disconnectedInputs.length > 0) {
-      setStatus(`数据管道未连通 · ${disconnectedInputs.join('、')}`, 'error');
+    const ignoredNodeIds = collectIgnoredNodeIds(graph);
+    const { runnableNodeIds, skippedNodeIds } = analyzeRunnableWorkflow(workflow, {
+      ignoredNodeIds,
+    });
+    if (runnableNodeIds.size === 0) {
+      setStatus('没有可执行的节点流程 · 请检查必填连线是否连通', 'error');
       return;
     }
 
     const missingFileLoaders = [...nodeTypes]
-      .filter(([nodeId, nodeType]) => nodeType === 'file_loader' && !filesByNode.has(nodeId))
+      .filter(([nodeId, nodeType]) =>
+        nodeType === 'file_loader' &&
+        runnableNodeIds.has(nodeId) &&
+        !filesByNode.has(nodeId),
+      )
       .map(([nodeId]) => `File Loader #${nodeId}`);
     if (missingFileLoaders.length > 0) {
+      for (const label of missingFileLoaders) {
+        const match = label.match(/#(\d+)$/);
+        if (match?.[1]) {
+          markNodeExecutionFailed(graph, match[1], '未选择文件');
+        }
+      }
+      canvas.setDirty(true, true);
       setStatus(`请在节点内选择文件 · ${missingFileLoaders.join('、')}`, 'error');
       return;
     }
 
+    clearNodeExecutionStates(graph);
     clearViewport();
     isRunning = true;
     setRunButtonDisabled(true);
-    setStatus(`正在执行 ${workflow.nodes.size} 个节点…`, 'running');
+    const skippedCount = skippedNodeIds.size;
+    const ignoredCount = ignoredNodeIds.size;
+    const skipSummary = buildExecutionSkipSummary(skippedCount, ignoredCount);
+    setStatus(
+      skipSummary
+        ? `正在执行 ${runnableNodeIds.size} 个节点（${skipSummary}）…`
+        : `正在执行 ${runnableNodeIds.size} 个节点…`,
+      'running',
+    );
 
     try {
-      const results = await executeGraph(workflow, execCache, signal, event => {
-        renderExecutionEvent(event);
-        updateDisplayNodePreview(event);
-        setStatus(
-          event.status === 'failed'
-            ? `执行失败 · ${event.node.displayName}`
-            : `正在执行 · ${event.node.displayName}`,
-          event.status === 'failed' ? 'error' : 'running',
-        );
-      });
+      const results = await executeGraph(
+        workflow,
+        execCache,
+        signal,
+        event => {
+          if (event.status === 'failed') {
+            const failedNode = markNodeExecutionFailed(
+              graph,
+              event.nodeId,
+              event.error?.message,
+            );
+            if (failedNode) {
+              (canvas as unknown as { centerOnNode(node: unknown): void }).centerOnNode(failedNode);
+            }
+            canvas.setDirty(true, true);
+          }
 
-      setStatus(`执行完成 · ${results.size} 个节点 · ${workflow.edges.length} 条连线`, 'success');
+          renderExecutionEvent(event);
+          updateDisplayNodePreview(event);
+          setStatus(
+            event.status === 'failed'
+              ? `执行失败 · ${event.node.displayName} · ${event.error?.message ?? 'Unknown error'}`
+              : skipSummary
+                ? `正在执行 · ${event.node.displayName}（${skipSummary}）`
+                : `正在执行 · ${event.node.displayName}`,
+            event.status === 'failed' ? 'error' : 'running',
+          );
+        },
+        { runnableNodeIds },
+      );
+
+      const successMessage = skipSummary
+        ? `执行完成 · ${results.size} 个节点 · ${skipSummary}`
+        : `执行完成 · ${results.size} 个节点 · ${workflow.edges.length} 条连线`;
+      setStatus(successMessage, 'success');
     } catch (err) {
       setStatus(`执行失败 · ${String(err)}`, 'error');
+      canvas.setDirty(true, true);
     } finally {
       isRunning = false;
       setRunButtonDisabled(false);
@@ -845,24 +926,24 @@ export function createApp(): MediaWorkflowApp {
     return `${fileName.slice(0, Math.max(10, 18 - extension.length))}…${extension}`;
   }
 
-  function findDisconnectedRequiredInputs(
-    workflow: ReturnType<typeof extractWorkflowFromLGraph>['graph'],
-  ): string[] {
-    const connectedInputs = new Set(
-      workflow.edges.map(edge => `${edge.targetNodeId}:${edge.targetInput}`),
-    );
-    const disconnected: string[] = [];
-
-    for (const [nodeId, node] of workflow.nodes) {
-      for (const [inputName, input] of Object.entries(node.inputs)) {
-        if (!input.optional && !connectedInputs.has(`${nodeId}:${inputName}`)) {
-          disconnected.push(`${node.displayName}.${inputName}`);
-        }
-      }
-    }
-
-    return disconnected;
-  }
-
   return { mount };
+}
+
+function getSelectedCanvasNodeIds(canvas: LGraphCanvas): string[] {
+  const selected = (canvas as unknown as { selected_nodes?: Record<string, unknown> }).selected_nodes;
+  if (!selected) return [];
+  return Object.keys(selected);
+}
+
+function buildExecutionSkipSummary(skippedCount: number, ignoredCount: number): string | null {
+  const parts: string[] = [];
+  if (ignoredCount > 0) {
+    parts.push(`${ignoredCount} 个已忽略`);
+  }
+  const disconnectedCount = Math.max(0, skippedCount - ignoredCount);
+  if (disconnectedCount > 0) {
+    parts.push(`${disconnectedCount} 个未连通`);
+  }
+  if (parts.length === 0) return null;
+  return `跳过 ${parts.join('，')}`;
 }

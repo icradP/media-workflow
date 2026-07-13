@@ -1,5 +1,4 @@
 import type {
-  DecodedVideoPixelFormat,
   EncodedPacket,
   MediaDiagnostic,
   MediaSample,
@@ -28,7 +27,6 @@ export function planVideoDecodeRequest(options: {
   samples: MediaSample[];
   selection: VideoFrameSelection;
   containerFormat: string;
-  outputFormat?: DecodedVideoPixelFormat;
 }): VideoDecodeRequest {
   const {
     requestId,
@@ -37,7 +35,6 @@ export function planVideoDecodeRequest(options: {
     samples,
     selection,
     containerFormat,
-    outputFormat = 'I420',
   } = options;
 
   const diagnostics: MediaDiagnostic[] = [];
@@ -74,7 +71,6 @@ export function planVideoDecodeRequest(options: {
     decoderConfig,
     decodePackets,
     targetSampleIds,
-    outputFormat,
     diagnostics,
   };
 }

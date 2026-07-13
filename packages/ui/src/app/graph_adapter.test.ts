@@ -107,4 +107,37 @@ describe('LiteGraph workflow adapter', () => {
       },
     ]);
   });
+
+  it('maps inline node widget values to workflow params', () => {
+    registerNodeTypes();
+    const graph = new LGraph();
+    const node = LiteGraph.createNode('media/audio_range_request');
+    graph.add(node);
+
+    const typedNode = node as unknown as {
+      properties: Record<string, unknown>;
+      widgets: Array<{ name: string; value: unknown }>;
+    };
+
+    expect(typedNode.widgets.map(widget => widget.name)).toEqual([
+      'startTimeSeconds',
+      'endTimeSeconds',
+    ]);
+    expect(typedNode.properties).toMatchObject({
+      startTimeSeconds: 0,
+      endTimeSeconds: 5,
+    });
+
+    typedNode.properties.startTimeSeconds = 12.5;
+    typedNode.properties.endTimeSeconds = 18;
+    const widget = typedNode.widgets.find(item => item.name === 'startTimeSeconds');
+    if (widget) widget.value = 12.5;
+
+    const extracted = extractWorkflowFromLGraph(graph);
+    const instance = [...extracted.graph.nodes.values()][0];
+    expect(instance?.params).toMatchObject({
+      startTimeSeconds: { default: 12.5 },
+      endTimeSeconds: { default: 18 },
+    });
+  });
 });

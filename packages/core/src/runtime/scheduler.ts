@@ -3,8 +3,12 @@ import type { NodeDefinition } from '../types/node';
 import type { ExecutionCache } from './cache';
 import type { WorkflowGraph } from '../graph/graph';
 import { buildReverseAdjacencyList } from '../graph/graph';
-import { assertValidWorkflowGraph } from '../graph/validate.js';
-import { topologicalLevels, affectedSubgraph } from '../graph/topo';
+import {
+  assertValidWorkflowGraph,
+  assertWorkflowGraphStructure,
+  workflowSubgraph,
+} from '../graph/index.js';
+import { hasCycle, topologicalLevels, affectedSubgraph } from '../graph/topo';
 import { createContext } from './context';
 
 /**
@@ -33,6 +37,11 @@ export interface NodeExecutionEvent {
 }
 
 export type NodeExecutionListener = (event: NodeExecutionEvent) => void;
+
+export interface ExecuteGraphOptions {
+  /** 仅执行该集合中的节点；默认执行全图（并要求所有必填输入已连线）。 */
+  runnableNodeIds?: Set<string>;
+}
 
 /**
  * 根据图构建执行计划。
@@ -72,17 +81,34 @@ export async function executeGraph(
   cache: ExecutionCache,
   signal: AbortSignal,
   onEvent?: NodeExecutionListener,
+  options?: ExecuteGraphOptions,
 ): Promise<Map<string, Map<string, unknown>>> {
-  assertValidWorkflowGraph(graph);
-  const plan = buildExecutionPlan(graph);
+  const runnableNodeIds = options?.runnableNodeIds;
+  const executionGraph = runnableNodeIds
+    ? workflowSubgraph(graph, runnableNodeIds)
+    : graph;
+
+  if (executionGraph.nodes.size === 0) {
+    return new Map();
+  }
+
+  if (runnableNodeIds) {
+    assertWorkflowGraphStructure(graph);
+    if (hasCycle(executionGraph)) {
+      throw new Error('Invalid workflow graph: Workflow graph contains a cycle.');
+    }
+  } else {
+    assertValidWorkflowGraph(graph);
+  }
+
+  const plan = buildExecutionPlan(executionGraph);
   const results = new Map<string, Map<string, unknown>>();
 
   for (const level of plan.levels) {
     if (signal.aborted) break;
 
-    // 同层节点可并行执行
     const levelPromises = level.map(nodeId => {
-      return executeNode(nodeId, graph, plan, results, cache, signal, onEvent);
+      return executeNode(nodeId, executionGraph, plan, results, cache, signal, onEvent);
     });
 
     await Promise.all(levelPromises);

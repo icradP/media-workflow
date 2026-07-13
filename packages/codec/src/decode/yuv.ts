@@ -65,10 +65,10 @@ function buildDecodedVideoFrame(
   frame: VideoFrame,
   sourceSampleId: string,
   planes: Uint8Array[],
-  strides: [number, number, number],
+  strides: number[],
+  outputFormat: DecodedVideoPixelFormat,
   copyFormat: string,
 ): DecodedVideoFrame {
-  const format: DecodedVideoPixelFormat = 'I420';
   return {
     frameId: `${sourceSampleId}:decoded`,
     sourceSampleId,
@@ -78,7 +78,7 @@ function buildDecodedVideoFrame(
     codedHeight: frame.codedHeight,
     displayWidth: frame.displayWidth,
     displayHeight: frame.displayHeight,
-    format,
+    format: outputFormat,
     planes,
     strides,
     colorSpace: {
@@ -154,14 +154,38 @@ export function videoFrameBufferToI420Planes(
   );
 }
 
-export async function copyVideoFrameToI420(
+export async function copyVideoFrame(
   frame: VideoFrame,
   sourceSampleId: string,
+  outputFormat: DecodedVideoPixelFormat = 'I420',
 ): Promise<DecodedVideoFrame> {
+  if (outputFormat !== 'I420' && outputFormat !== 'NV12') {
+    throw new Error(`copyVideoFrame: unsupported output format ${outputFormat}`);
+  }
+
   const displayWidth = frame.displayWidth;
   const displayHeight = frame.displayHeight;
   const uvWidth = Math.ceil(displayWidth / 2);
   const nativeFormat = videoFrameFormat(frame);
+
+  if (outputFormat === 'NV12') {
+    const { buffer, layout } = await copyVideoFrameWithExplicitFormat(frame, 'NV12');
+    const [yLayout, uvLayout] = layout;
+    if (!yLayout || !uvLayout) {
+      throw new Error('copyVideoFrame: NV12 plane layout is incomplete');
+    }
+    return buildDecodedVideoFrame(
+      frame,
+      sourceSampleId,
+      [
+        extractPlane(buffer, yLayout, displayWidth, displayHeight),
+        extractPlane(buffer, uvLayout, displayWidth, displayHeight / 2),
+      ],
+      [displayWidth, displayWidth],
+      'NV12',
+      'NV12',
+    );
+  }
 
   try {
     const { buffer, layout, format } = await copyNativeVideoFrame(frame);
@@ -177,6 +201,7 @@ export async function copyVideoFrameToI420(
       sourceSampleId,
       planes,
       [displayWidth, uvWidth, uvWidth],
+      'I420',
       String(format ?? 'native'),
     );
   } catch (error) {
@@ -208,6 +233,7 @@ export async function copyVideoFrameToI420(
         sourceSampleId,
         planes,
         [displayWidth, uvWidth, uvWidth],
+        'I420',
         format,
       );
     } catch (error) {
@@ -221,7 +247,15 @@ export async function copyVideoFrameToI420(
 
   throw lastError instanceof Error
     ? lastError
-    : new Error('copyVideoFrameToI420: no supported VideoFrame copy format (I420/NV12)');
+    : new Error('copyVideoFrame: no supported VideoFrame copy format (I420/NV12)');
+}
+
+/** @deprecated Use copyVideoFrame instead. */
+export async function copyVideoFrameToI420(
+  frame: VideoFrame,
+  sourceSampleId: string,
+): Promise<DecodedVideoFrame> {
+  return copyVideoFrame(frame, sourceSampleId, 'I420');
 }
 
 export function packI420Planes(frame: DecodedVideoFrame): Uint8Array {

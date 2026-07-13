@@ -9,6 +9,7 @@ export {
   int16ToFloat32Planar,
 } from './pcm.js';
 export {
+  copyVideoFrame,
   copyVideoFrameToI420,
   isWebCodecsAudioAvailable,
   isWebCodecsAvailable,

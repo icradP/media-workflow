@@ -110,3 +110,12 @@ export function assertValidWorkflowGraph(graph: WorkflowGraph): void {
     throw new Error(`Invalid workflow graph: ${issues.map(issue => issue.message).join(' ')}`);
   }
 }
+
+export function assertWorkflowGraphStructure(graph: WorkflowGraph): void {
+  const issues = validateWorkflowGraph(graph).filter(
+    issue => issue.code !== 'required_input',
+  );
+  if (issues.length > 0) {
+    throw new Error(`Invalid workflow graph: ${issues.map(issue => issue.message).join(' ')}`);
+  }
+}

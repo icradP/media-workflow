@@ -21,8 +21,7 @@
         "startTimeSeconds": 0,
         "endTimeSeconds": -1,
         "frameType": "key",
-        "limit": 1,
-        "outputFormat": "I420"
+        "limit": 1
       }
     }
   ],

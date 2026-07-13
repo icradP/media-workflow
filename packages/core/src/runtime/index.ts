@@ -5,5 +5,6 @@ export type {
   NodeExecutionEvent,
   NodeExecutionListener,
 } from './scheduler';
+export type { ExecuteGraphOptions } from './scheduler';
 export { buildExecutionPlan, executeGraph, executeIncremental } from './scheduler';
 export { createContext } from './context';

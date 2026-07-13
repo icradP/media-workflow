@@ -5,7 +5,13 @@ export {
   validateEdge,
 } from './edge';
 export type { GraphValidationIssue } from './validate';
-export { validateWorkflowGraph, assertValidWorkflowGraph } from './validate';
+export {
+  validateWorkflowGraph,
+  assertValidWorkflowGraph,
+  assertWorkflowGraphStructure,
+} from './validate';
+export type { AnalyzeRunnableWorkflowOptions, RunnableWorkflowAnalysis } from './runnable';
+export { analyzeRunnableWorkflow, workflowSubgraph } from './runnable';
 export type {
   WorkflowGraph,
   WorkflowGraphJSON,

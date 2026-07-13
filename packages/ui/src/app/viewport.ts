@@ -34,11 +34,24 @@ export function clearViewport(): void {
 }
 
 export function renderExecutionEvent(event: NodeExecutionEvent): void {
-  if (event.status === 'failed') return;
+  if (event.status === 'failed') {
+    renderFailureEvent(event);
+    return;
+  }
+
   const renderer = renderers.get(event.node.id);
   if (!renderer) return;
   const element = resultElementFor(event);
   if (element && renderer) renderer(event, element);
+}
+
+function renderFailureEvent(event: NodeExecutionEvent): void {
+  const element = resultElementFor(event);
+  if (!element) return;
+  element.innerHTML = `
+    <h4 class="viewport-title viewport-title--error">执行失败</h4>
+    <p class="viewport-note viewport-note--error">${escapeHtml(event.error?.message ?? 'Unknown error')}</p>
+  `;
 }
 
 function resultElementFor(event: NodeExecutionEvent): HTMLElement | null {
@@ -48,12 +61,21 @@ function resultElementFor(event: NodeExecutionEvent): HTMLElement | null {
   const existing = resultElements.get(event.nodeId);
   if (existing) {
     const state = existing.parentElement?.querySelector<HTMLElement>('.result-card__state');
-    if (state) state.textContent = event.cacheHit ? 'Cached' : `${event.durationMs.toFixed(1)} ms`;
+    if (state) {
+      state.textContent = event.status === 'failed'
+        ? 'Failed'
+        : event.cacheHit
+          ? 'Cached'
+          : `${event.durationMs.toFixed(1)} ms`;
+    }
+    if (event.status === 'failed') {
+      existing.parentElement?.classList.add('result-card--failed');
+    }
     return existing;
   }
 
   const card = document.createElement('article');
-  card.className = 'result-card';
+  card.className = event.status === 'failed' ? 'result-card result-card--failed' : 'result-card';
   card.dataset.nodeId = event.nodeId;
 
   const header = document.createElement('header');
