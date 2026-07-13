@@ -7,6 +7,7 @@ import decodeFirstKeyframePreset from '../../presets/decode-first-keyframe.workf
 import decodeFirstKeyframeDisplayPreset from '../../presets/decode-first-keyframe-display.workflow.json';
 import decodeAudioRangePreset from '../../presets/decode-audio-range.workflow.json';
 import remuxMp4SelectionsPreset from '../../presets/remux-mp4-selections.workflow.json';
+import captureRecordMp4Preset from '../../presets/capture-record-mp4.workflow.json';
 
 export interface WorkflowPresetCatalogEntry {
   id: string;
@@ -63,6 +64,12 @@ export const WORKFLOW_PRESET_CATALOG: WorkflowPresetCatalogEntry[] = [
     name: '音频片段解码播放',
     description: '直接解码前 5 秒音频，播放并导出 WAV。',
     preset: decodeAudioRangePreset as WorkflowPreset,
+  },
+  {
+    id: 'capture-record-mp4',
+    name: '摄像头采集封装',
+    description: '采集摄像头与麦克风，编码 H.264/AAC，封装 MP4 并播放、导出。',
+    preset: captureRecordMp4Preset as WorkflowPreset,
   },
   {
     id: 'remux-mp4-selections',

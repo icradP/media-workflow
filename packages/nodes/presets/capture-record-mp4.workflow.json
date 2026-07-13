@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "name": "Capture Record MP4",
+  "description": "Capture camera and microphone, encode to H.264/AAC, mux MP4, and export.",
+  "nodes": [
+    {
+      "id": "capture",
+      "type": "device_capture",
+      "position": [80, 180],
+      "params": {
+        "durationSeconds": 5,
+        "enableVideo": true,
+        "enableMicrophone": true,
+        "enableSpeaker": false,
+        "width": 640,
+        "height": 480,
+        "frameRate": 30,
+        "sampleRate": 48000
+      }
+    },
+    {
+      "id": "encode-video",
+      "type": "h264_encoder",
+      "position": [420, 80],
+      "params": { "bitrate": 2000000 }
+    },
+    {
+      "id": "encode-audio",
+      "type": "aac_encoder",
+      "position": [420, 280],
+      "params": { "bitrate": 128000 }
+    },
+    {
+      "id": "mux",
+      "type": "mp4_muxer",
+      "position": [760, 180],
+      "params": { "fileName": "capture.mp4", "alignMode": "trim_to_video" }
+    },
+    { "id": "play", "type": "mp4_player", "position": [1040, 180] },
+    {
+      "id": "export",
+      "type": "file_export",
+      "position": [1320, 180],
+      "params": { "fileName": "capture.mp4" }
+    }
+  ],
+  "edges": [
+    {
+      "id": "capture-video",
+      "sourceNodeId": "capture",
+      "sourceOutput": "video",
+      "targetNodeId": "encode-video",
+      "targetInput": "video"
+    },
+    {
+      "id": "capture-video-selection",
+      "sourceNodeId": "capture",
+      "sourceOutput": "videoSelection",
+      "targetNodeId": "encode-video",
+      "targetInput": "selection"
+    },
+    {
+      "id": "capture-mic",
+      "sourceNodeId": "capture",
+      "sourceOutput": "microphone",
+      "targetNodeId": "encode-audio",
+      "targetInput": "pcm"
+    },
+    {
+      "id": "capture-mic-selection",
+      "sourceNodeId": "capture",
+      "sourceOutput": "micSelection",
+      "targetNodeId": "encode-audio",
+      "targetInput": "selection"
+    },
+    {
+      "id": "video-mux",
+      "sourceNodeId": "encode-video",
+      "sourceOutput": "selection",
+      "targetNodeId": "mux",
+      "targetInput": "video"
+    },
+    {
+      "id": "audio-mux",
+      "sourceNodeId": "encode-audio",
+      "sourceOutput": "selection",
+      "targetNodeId": "mux",
+      "targetInput": "audio"
+    },
+    {
+      "id": "mux-play",
+      "sourceNodeId": "mux",
+      "sourceOutput": "file",
+      "targetNodeId": "play",
+      "targetInput": "source"
+    },
+    {
+      "id": "mux-export",
+      "sourceNodeId": "mux",
+      "sourceOutput": "file",
+      "targetNodeId": "export",
+      "targetInput": "file"
+    }
+  ]
+}

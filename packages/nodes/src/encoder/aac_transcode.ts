@@ -1,9 +1,7 @@
 import type {
-  AudioDecodeRequest,
   MediaAsset,
   MediaSelection,
   NodeDefinition,
-  PcmAudioClip,
 } from '@media-workflow/core';
 import {
   buildAacMediaSelection,
@@ -12,8 +10,7 @@ import {
   isWebCodecsAacEncoderAvailable,
   resolveAudioSelection,
 } from '@media-workflow/codec';
-import { g711DecoderNode } from '../decoder/g711.js';
-import { webcodecsAudioDecoderNode } from '../decoder/webcodecs_audio.js';
+import { decodeAudioRequestToPcm } from '../decoder/decode_audio_request.js';
 
 export const aacTranscodeNode: NodeDefinition<
   { source: 'decode_source' },
@@ -66,7 +63,7 @@ export const aacTranscodeNode: NodeDefinition<
     const pcm = await decodeAudioSelectionToPcm(
       selection,
       `${selection.selectionId}:transcode`,
-      async request => decodeRequestToPcm(ctx, request),
+      async request => decodeAudioRequestToPcm(ctx, request),
     );
 
     const encoded = await encodePcmToAac(pcm, {
@@ -81,17 +78,3 @@ export const aacTranscodeNode: NodeDefinition<
     return { selection: aacSelection };
   },
 };
-
-async function decodeRequestToPcm(
-  ctx: Parameters<typeof webcodecsAudioDecoderNode.execute>[0],
-  request: AudioDecodeRequest,
-): Promise<PcmAudioClip> {
-  const decoder = request.track.codecFamily === 'g711'
-    ? g711DecoderNode
-    : webcodecsAudioDecoderNode;
-  const result = await decoder.execute(ctx, {
-    inputs: { request },
-    params: {},
-  });
-  return result.pcm as PcmAudioClip;
-}

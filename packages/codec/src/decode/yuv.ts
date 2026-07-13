@@ -69,15 +69,18 @@ function buildDecodedVideoFrame(
   outputFormat: DecodedVideoPixelFormat,
   copyFormat: string,
 ): DecodedVideoFrame {
+  // Planes are tightly packed to display size; coded size must match stride layout.
+  const width = frame.displayWidth;
+  const height = frame.displayHeight;
   return {
     frameId: `${sourceSampleId}:decoded`,
     sourceSampleId,
     ptsUs: Math.round(frame.timestamp),
     durationUs: undefined,
-    codedWidth: frame.codedWidth,
-    codedHeight: frame.codedHeight,
-    displayWidth: frame.displayWidth,
-    displayHeight: frame.displayHeight,
+    codedWidth: width,
+    codedHeight: height,
+    displayWidth: width,
+    displayHeight: height,
     format: outputFormat,
     planes,
     strides,

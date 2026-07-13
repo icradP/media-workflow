@@ -236,6 +236,25 @@ export function loadWorkflowPresetIntoLGraph(
   }
 }
 
+export function resolveCanvasNodeDefinition(
+  nodeType: string,
+  nodeId: string,
+  properties: Record<string, unknown> | undefined,
+  getFileForNode?: (nodeId: string) => File | null | undefined,
+  defaultFile?: File | null,
+): NodeDefinition | undefined {
+  const defId = nodeType.replace(/^media\//, '');
+  const baseDef = nodeRegistry.get(defId);
+  if (!baseDef) return undefined;
+
+  let def: NodeDefinition = applyNodeParams(baseDef, properties);
+  if (defId === 'file_loader') {
+    const file = getFileForNode?.(nodeId) ?? defaultFile ?? null;
+    def = wrapFileLoader(baseDef, nodeId, file);
+  }
+  return def;
+}
+
 export function extractWorkflowFromLGraph(
   graph: LGraph,
   options: ExtractWorkflowOptions = {},
@@ -252,11 +271,14 @@ export function extractWorkflowFromLGraph(
     const nodeId = String(n.id);
     nodeTypes.set(nodeId, defId);
 
-    let def: NodeDefinition = applyNodeParams(baseDef, n.properties);
-    if (defId === 'file_loader') {
-      const file = options.getFileForNode?.(nodeId) ?? options.defaultFile ?? null;
-      def = wrapFileLoader(baseDef, nodeId, file);
-    }
+    const def = resolveCanvasNodeDefinition(
+      n.type,
+      nodeId,
+      n.properties,
+      options.getFileForNode,
+      options.defaultFile,
+    );
+    if (!def) continue;
 
     nodes.set(nodeId, def);
   }

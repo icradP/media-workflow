@@ -1,6 +1,10 @@
 import type { NodeDefinition, NodeParamDef } from '@media-workflow/core';
 import { LiteGraph } from 'litegraph.js';
 import { frameSelectorNodeHeight, frameSelectorNodeWidth } from './frame_selector_ui.js';
+import {
+  deviceCaptureNodeHeight,
+  deviceCaptureNodeWidth,
+} from './device_capture_ui.js';
 
 const NODES_WITH_CUSTOM_UI = new Set([
   'media_select',
@@ -52,6 +56,12 @@ export function attachNodeParamWidgets(
   };
 
   for (const [paramKey, param] of params) {
+    if (
+      nodeDef.id === 'device_capture' &&
+      (paramKey === 'videoDeviceId' || paramKey === 'audioDeviceId')
+    ) {
+      continue;
+    }
     node.properties[paramKey] = param.default;
     const widgetType = widgetTypeForParam(param);
     const widgetOptions = widgetOptionsForParam(param, paramKey);
@@ -66,6 +76,7 @@ export function attachNodeParamWidgets(
 }
 
 export function preferredNodeWidth(nodeDef: NodeDefinition): number {
+  if (nodeDef.id === 'device_capture') return deviceCaptureNodeWidth();
   if (NODES_WITH_CUSTOM_UI.has(nodeDef.id)) return frameSelectorNodeWidth();
   const labels = Object.values(nodeDef.params ?? {}).map(widgetLabel);
   const longest = labels.reduce((max, label) => Math.max(max, label.length), 0);
@@ -116,6 +127,7 @@ function resolvePropertyKey(
 }
 
 export function minimumDisplayNodeHeight(nodeDef: NodeDefinition): number {
+  if (nodeDef.id === 'device_capture') return deviceCaptureNodeHeight();
   if (NODES_WITH_CUSTOM_UI.has(nodeDef.id)) return frameSelectorNodeHeight();
   const widgetCount = Object.keys(nodeDef.params ?? {}).length;
   const slotCount = Object.keys(nodeDef.inputs).length + Object.keys(nodeDef.outputs).length;

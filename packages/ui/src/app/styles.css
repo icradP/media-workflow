@@ -270,6 +270,18 @@ button {
   border-color: transparent;
 }
 
+.button--accent {
+  padding-inline: 14px;
+  background: rgba(61, 220, 151, 0.14);
+  border-color: rgba(61, 220, 151, 0.35);
+  color: var(--success);
+}
+
+.button--accent:hover {
+  background: rgba(61, 220, 151, 0.22);
+  border-color: rgba(61, 220, 151, 0.5);
+}
+
 .button__icon {
   width: 14px;
   height: 14px;

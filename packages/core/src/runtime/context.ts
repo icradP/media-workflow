@@ -2,10 +2,6 @@ import type { ExecuteContext, Logger, ResourceTracker } from '../types/node';
 
 /**
  * 创建默认的 ExecuteContext。
- *
- * @param signal   来自 scheduler 的取消信号
- * @param logger   可选自定义 logger（默认 console）
- * @param resources 可选自定义 resourceTracker
  */
 export function createContext(
   signal: AbortSignal,

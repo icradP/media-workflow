@@ -9,6 +9,8 @@ export {
   float32PlanarToInterleaved,
   int16ToFloat32Planar,
 } from './pcm.js';
+export { resamplePcmClip } from './resample.js';
+export type { ResamplePcmOptions } from './resample.js';
 export {
   decodeAudioSelectionToPcm,
   resolveAudioSelection,

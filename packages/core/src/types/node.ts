@@ -48,8 +48,8 @@ export interface NodeDefinition<
   params?: Record<string, NodeParamDef>;
   /** 指定在 Worker 中执行 */
   worker?: string;
-  /** 是否为流式节点 */
-  streaming?: boolean;
+  /** `never` 用于每次执行都必须产生新数据的节点。 */
+  cachePolicy?: 'default' | 'never';
   /** 节点描述 */
   description?: string;
   /**

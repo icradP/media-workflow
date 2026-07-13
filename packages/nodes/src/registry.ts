@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '@media-workflow/core';
 import { fileLoaderNode } from './source/file_loader.js';
+import { deviceCaptureNode } from './source/device_capture.js';
 import { urlFetcherNode } from './source/url_fetcher.js';
 import { autoAnalyzeNode } from './parser/auto_detect.js';
 import { trackSelectNode } from './select/track_select.js';
@@ -18,11 +19,14 @@ import { wavEncoderNode } from './encoder/wav.js';
 import { aacEncoderNode } from './encoder/aac_encoder.js';
 import { aacTranscodeNode } from './encoder/aac_transcode.js';
 import { mp4MuxerNode } from './encoder/mp4_muxer.js';
+import { h264EncoderNode } from './encoder/h264_encoder.js';
+import { audioResampleNode } from './transform/audio_resample.js';
 import { rawYuvExporterNode } from './export/raw_yuv.js';
 import { fileExportNode } from './export/file_export.js';
 
 export const allNodes: NodeDefinition[] = [
   fileLoaderNode,
+  deviceCaptureNode,
   urlFetcherNode,
   autoAnalyzeNode,
   trackSelectNode,
@@ -40,6 +44,8 @@ export const allNodes: NodeDefinition[] = [
   wavEncoderNode,
   aacEncoderNode,
   aacTranscodeNode,
+  h264EncoderNode,
+  audioResampleNode,
   mp4MuxerNode,
   rawYuvExporterNode,
   fileExportNode,

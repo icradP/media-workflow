@@ -29,5 +29,6 @@ codec details, duration, sample counts, and non-monotonic DTS diagnostics.
 
 `tests/generated-av.mp4` is a deterministic two-second H.264/AAC fixture used
 to exercise real MP4 `trak`, `stsd`, `stsc`, `stsz`, `stts`, `ctts`, and `stss`
-tables. `tests/record.mp4` intentionally contains no `trak` boxes; FFprobe and
+tables. `tests/generated-av.flv` is the same content in FLV container format.
+`tests/record.mp4` intentionally contains no `trak` boxes; FFprobe and
 the project parser therefore both report zero tracks for that file.

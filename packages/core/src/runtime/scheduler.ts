@@ -203,7 +203,10 @@ async function executeNode(
   }
 
   // 检查缓存
-  const cached = cache.get(nodeId, inputValues, paramValues);
+  const shouldCache = node.cachePolicy !== 'never';
+  const cached = shouldCache
+    ? cache.get(nodeId, inputValues, paramValues)
+    : undefined;
   if (cached) {
     const startedAt = performance.now();
     const outputs = new Map(Object.entries(cached.outputs));
@@ -237,7 +240,9 @@ async function executeNode(
     }
 
     results.set(nodeId, new Map(Object.entries(outputs)));
-    cache.set(nodeId, inputValues, paramValues, { outputs });
+    if (shouldCache) {
+      cache.set(nodeId, inputValues, paramValues, { outputs });
+    }
     onEvent?.({
       nodeId,
       node,

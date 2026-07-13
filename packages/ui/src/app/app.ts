@@ -47,6 +47,11 @@ import {
   type FrameSelectorNode,
 } from './frame_selector_ui.js';
 import { initNodeInspector } from './node_inspector.js';
+import {
+  attachDeviceCaptureUi,
+  deviceCaptureNodeHeight,
+  deviceCaptureNodeWidth,
+} from './device_capture_ui.js';
 import { clearViewport, renderExecutionEvent } from './viewport.js';
 
 // ─── Pin type → LiteGraph color ───
@@ -114,14 +119,14 @@ const CATEGORY_COLORS: Record<string, string> = {
   decode: '#54a0ff',
   inspect: '#feca57',
   transform: '#10ac84',
+  export: '#1dd1a1',
+  utility: '#f368e0',
   parser: '#7c5cff',
   demux: '#ff9f43',
   decoder: '#54a0ff',
   analysis: '#f368e0',
   display: '#feca57',
-  utility: '#8b93a7',
   encoder: '#10ac84',
-  export: '#10ac84',
 };
 
 type StatusState = 'idle' | 'running' | 'success' | 'error';
@@ -256,6 +261,9 @@ export function registerNodeTypes(
         this.fileWidget = this.addWidget('button', '选择文件…', null, () => {
           options.onRequestFile?.(this);
         });
+      }
+      if (nodeDef.id === 'device_capture') {
+        attachDeviceCaptureUi(this as never, onParamChange);
       }
       initNodeParamDefaults(this as never, nodeDef);
       attachNodeParamWidgets(this as never, nodeDef, onParamChange);
@@ -588,8 +596,6 @@ export function createApp(): MediaWorkflowApp {
       },
     });
 
-    graph.start();
-
     setupFilePicker();
     buildPalette();
     setupToolbar();
@@ -884,14 +890,65 @@ export function createApp(): MediaWorkflowApp {
   async function runWorkflow() {
     if (isRunning) return;
 
+    const prepared = prepareWorkflowExecution();
+    if (!prepared) return;
+
+    const {
+      workflow,
+      runnableNodeIds,
+      skipSummary,
+    } = prepared;
+
     const signal = new AbortController().signal;
+    clearNodeExecutionStates(graph);
+    clearViewport();
+    isRunning = true;
+    setRunButtonDisabled(true);
+
+    setStatus(
+      skipSummary
+        ? `正在执行 ${runnableNodeIds.size} 个节点（${skipSummary}）…`
+        : `正在执行 ${runnableNodeIds.size} 个节点…`,
+      'running',
+    );
+
+    try {
+      const results = await executeGraph(
+        workflow,
+        execCache,
+        signal,
+        event => handleExecutionEvent(event, skipSummary),
+        { runnableNodeIds },
+      );
+
+      const successMessage = skipSummary
+        ? `执行完成 · ${results.size} 个节点 · ${skipSummary}`
+        : `执行完成 · ${results.size} 个节点 · ${workflow.edges.length} 条连线`;
+      setStatus(successMessage, 'success');
+    } catch (err) {
+      setStatus(`执行失败 · ${String(err)}`, 'error');
+      canvas.setDirty(true, true);
+    } finally {
+      isRunning = false;
+      setRunButtonDisabled(false);
+    }
+  }
+
+  function prepareWorkflowExecution():
+    | {
+      workflow: ReturnType<typeof extractWorkflowFromLGraph>['graph'];
+      nodeTypes: Map<string, string>;
+      runnableNodeIds: Set<string>;
+      skipSummary: string | undefined;
+    }
+    | undefined {
     const { graph: workflow, nodeTypes } = extractWorkflowFromLGraph(graph, {
       getFileForNode: nodeId => filesByNode.get(nodeId),
     });
 
     if (workflow.nodes.size === 0) {
       setStatus('画布中没有可执行节点', 'error');
-      return;
+      return undefined;
     }
 
     const ignoredNodeIds = collectIgnoredNodeIds(graph);
@@ -900,7 +957,7 @@ export function createApp(): MediaWorkflowApp {
     });
     if (runnableNodeIds.size === 0) {
       setStatus('没有可执行的节点流程 · 请检查必填连线是否连通', 'error');
-      return;
+      return undefined;
     }
 
     const missingFileLoaders = [...nodeTypes]
@@ -919,67 +976,50 @@ export function createApp(): MediaWorkflowApp {
       }
       canvas.setDirty(true, true);
       setStatus(`请在节点内选择文件 · ${missingFileLoaders.join('、')}`, 'error');
+      return undefined;
+    }
+
+    const skippedCount = skippedNodeIds.size;
+    const ignoredCount = ignoredNodeIds.size;
+    const skipSummary = buildExecutionSkipSummary(skippedCount, ignoredCount) ?? undefined;
+
+    return { workflow, nodeTypes, runnableNodeIds, skipSummary };
+  }
+
+  function handleExecutionEvent(
+    event: NodeExecutionEvent,
+    skipSummary: string | undefined,
+  ) {
+    if (event.status === 'failed') {
+      const failedNode = markNodeExecutionFailed(
+        graph,
+        event.nodeId,
+        event.error?.message,
+      );
+      if (failedNode) {
+        (canvas as unknown as { centerOnNode(node: unknown): void }).centerOnNode(failedNode);
+      }
+      canvas.setDirty(true, true);
+    }
+
+    renderExecutionEvent(event);
+    updateDisplayNodePreview(event);
+    updateFrameSelectorNodePreview(event);
+
+    if (event.status === 'failed') {
+      setStatus(
+        `执行失败 · ${event.node.displayName} · ${event.error?.message ?? 'Unknown error'}`,
+        'error',
+      );
       return;
     }
 
-    clearNodeExecutionStates(graph);
-    clearViewport();
-    isRunning = true;
-    setRunButtonDisabled(true);
-    const skippedCount = skippedNodeIds.size;
-    const ignoredCount = ignoredNodeIds.size;
-    const skipSummary = buildExecutionSkipSummary(skippedCount, ignoredCount);
     setStatus(
       skipSummary
-        ? `正在执行 ${runnableNodeIds.size} 个节点（${skipSummary}）…`
-        : `正在执行 ${runnableNodeIds.size} 个节点…`,
+        ? `正在执行 · ${event.node.displayName}（${skipSummary}）`
+        : `正在执行 · ${event.node.displayName}`,
       'running',
     );
-
-    try {
-      const results = await executeGraph(
-        workflow,
-        execCache,
-        signal,
-        event => {
-          if (event.status === 'failed') {
-            const failedNode = markNodeExecutionFailed(
-              graph,
-              event.nodeId,
-              event.error?.message,
-            );
-            if (failedNode) {
-              (canvas as unknown as { centerOnNode(node: unknown): void }).centerOnNode(failedNode);
-            }
-            canvas.setDirty(true, true);
-          }
-
-          renderExecutionEvent(event);
-          updateDisplayNodePreview(event);
-          updateFrameSelectorNodePreview(event);
-          setStatus(
-            event.status === 'failed'
-              ? `执行失败 · ${event.node.displayName} · ${event.error?.message ?? 'Unknown error'}`
-              : skipSummary
-                ? `正在执行 · ${event.node.displayName}（${skipSummary}）`
-                : `正在执行 · ${event.node.displayName}`,
-            event.status === 'failed' ? 'error' : 'running',
-          );
-        },
-        { runnableNodeIds },
-      );
-
-      const successMessage = skipSummary
-        ? `执行完成 · ${results.size} 个节点 · ${skipSummary}`
-        : `执行完成 · ${results.size} 个节点 · ${workflow.edges.length} 条连线`;
-      setStatus(successMessage, 'success');
-    } catch (err) {
-      setStatus(`执行失败 · ${String(err)}`, 'error');
-      canvas.setDirty(true, true);
-    } finally {
-      isRunning = false;
-      setRunButtonDisabled(false);
-    }
   }
 
   function saveWorkflowToFile() {

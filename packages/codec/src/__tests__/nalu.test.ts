@@ -29,6 +29,18 @@ describe('hasAnnexBStartCode', () => {
     expect(hasAnnexBStartCode(new Uint8Array([0x01, 0x02, 0x03]))).toBe(false);
     expect(hasAnnexBStartCode(new Uint8Array([]))).toBe(false);
   });
+
+  it('does not treat AVCC length prefixes that resemble start codes as Annex-B', () => {
+    const nalu = new Uint8Array(256).fill(0xab);
+    const avcc = new Uint8Array(4 + nalu.length);
+    avcc[0] = 0x00;
+    avcc[1] = 0x00;
+    avcc[2] = 0x01;
+    avcc[3] = 0x00;
+    avcc.set(nalu, 4);
+    expect(hasAnnexBStartCode(avcc)).toBe(true);
+    expect(splitLengthPrefixedNalUnits(avcc, 4)).not.toBeNull();
+  });
 });
 
 describe('splitAnnexBNalus', () => {

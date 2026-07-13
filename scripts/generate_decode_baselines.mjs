@@ -13,7 +13,7 @@ const requestedFiles = process.argv.slice(2).filter(argument => argument !== '--
 
 const fileNames = requestedFiles.length > 0
   ? requestedFiles
-  : ['869247060193353-ok.flv', 'generated-av.mp4', 'test.ts'];
+  : ['generated-av.flv', 'generated-av.mp4', 'test.ts'];
 
 const ffmpegVersion = commandVersion('ffmpeg');
 
@@ -24,6 +24,7 @@ for (const fileName of fileNames) {
   const bytes = await readFile(inputPath);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   const baseName = basename(fileName, extname(fileName));
+  const recordName = basename(fileName);
   const record = {
     schemaVersion: 1,
     generator: { ffmpeg: ffmpegVersion },
@@ -37,11 +38,11 @@ for (const fileName of fileNames) {
     wav: await extractAudioWav(inputPath, baseName),
   };
   await writeFile(
-    join(outputDir, `${baseName}.decode.json`),
+    join(outputDir, `${recordName}.decode.json`),
     `${JSON.stringify(record, null, 2)}\n`,
     'utf8',
   );
-  console.log(`Wrote ${baseName}.decode.json`);
+  console.log(`Wrote ${recordName}.decode.json`);
 }
 
 async function extractFirstKeyYuv(inputPath, baseName) {

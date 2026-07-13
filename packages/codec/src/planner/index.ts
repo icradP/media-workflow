@@ -7,6 +7,7 @@ export {
   stableSelectionId,
 } from './selection.js';
 export { buildAacMediaSelection } from './aac_selection.js';
+export { buildH264MediaSelection } from './h264_selection.js';
 export type {
   MediaSelectionOptions,
   TrackSelectionOptions,

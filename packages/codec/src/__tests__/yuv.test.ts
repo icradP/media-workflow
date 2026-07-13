@@ -99,7 +99,7 @@ describe('I420 decode helpers', () => {
   });
 
   it('round-trips ffmpeg yuv420p fixtures through packI420Planes', () => {
-    const record = readBaseline('869247060193353-ok.decode.json');
+    const record = readBaseline('generated-av.mp4.decode.json');
     if (!record.video.available) return;
 
     const yuvBytes = readFileSync(join(root, record.video.outputFile));
