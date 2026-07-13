@@ -6,6 +6,7 @@ import ffprobeAudioTrackPreset from '../../presets/ffprobe-audio-track.workflow.
 import decodeFirstKeyframePreset from '../../presets/decode-first-keyframe.workflow.json';
 import decodeFirstKeyframeDisplayPreset from '../../presets/decode-first-keyframe-display.workflow.json';
 import decodeAudioRangePreset from '../../presets/decode-audio-range.workflow.json';
+import remuxMp4SelectionsPreset from '../../presets/remux-mp4-selections.workflow.json';
 
 export interface WorkflowPresetCatalogEntry {
   id: string;
@@ -59,9 +60,15 @@ export const WORKFLOW_PRESET_CATALOG: WorkflowPresetCatalogEntry[] = [
   },
   {
     id: 'decode-audio-range',
-    name: '音频片段解码导出',
-    description: '直接解码前 5 秒音频并导出 WAV。',
+    name: '音频片段解码播放',
+    description: '直接解码前 5 秒音频，播放并导出 WAV。',
     preset: decodeAudioRangePreset as WorkflowPreset,
+  },
+  {
+    id: 'remux-mp4-selections',
+    name: 'MP4 选段封装',
+    description: '分别选择视频/音频范围，封装 MP4 并播放、导出。',
+    preset: remuxMp4SelectionsPreset as WorkflowPreset,
   },
 ];
 

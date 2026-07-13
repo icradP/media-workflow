@@ -5,6 +5,7 @@ export const BYTE_PRODUCING_PIN_TYPES: ReadonlySet<PinType> = new Set([
   'buffer',
   'media_source',
   'media_asset',
+  'selected_track',
   'media_selection',
   'media_samples',
   'compressed',
@@ -48,7 +49,9 @@ export function arePinTypesCompatible(source: PinType, target: PinType): boolean
     (target === 'selection_source' &&
       (source === 'media_asset' || source === 'selected_track')) ||
     (target === 'decode_source' &&
-      (source === 'media_asset' || source === 'media_selection'));
+      (source === 'media_asset' || source === 'media_selection')) ||
+    (target === 'playback_source' &&
+      (source === 'media_file' || source === 'media_source'));
 }
 
 /**

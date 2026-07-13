@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "Decode Audio Range",
-  "description": "Task mode: decode the first five seconds of audio and export WAV.",
+  "description": "Task mode: decode the first five seconds of audio, play WAV, and export.",
   "nodes": [
     { "id": "file", "type": "file_loader", "position": [80, 160] },
     { "id": "analyze", "type": "auto_analyze", "position": [360, 160] },
@@ -21,7 +21,8 @@
       "position": [980, 160],
       "params": { "fileName": "audio.wav", "sampleFormat": "pcm16" }
     },
-    { "id": "download", "type": "file_export", "position": [1260, 160] }
+    { "id": "play-wav", "type": "wav_player", "position": [1260, 160] },
+    { "id": "download", "type": "file_export", "position": [1540, 160] }
   ],
   "edges": [
     {
@@ -44,6 +45,13 @@
       "sourceOutput": "audio",
       "targetNodeId": "encode-wav",
       "targetInput": "pcm"
+    },
+    {
+      "id": "encode-play",
+      "sourceNodeId": "encode-wav",
+      "sourceOutput": "file",
+      "targetNodeId": "play-wav",
+      "targetInput": "source"
     },
     {
       "id": "encode-download",

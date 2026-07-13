@@ -27,7 +27,12 @@ import {
   DEFAULT_WORKFLOW_PRESET_ID,
   type WorkflowPreset,
 } from '@media-workflow/nodes';
-import { createMemoryCache, executeGraph, analyzeRunnableWorkflow } from '@media-workflow/core';
+import {
+  BYTE_PRODUCING_PIN_TYPES,
+  createMemoryCache,
+  executeGraph,
+  analyzeRunnableWorkflow,
+} from '@media-workflow/core';
 import type { ExecutionCache, NodeExecutionEvent } from '@media-workflow/core';
 import {
   exportWorkflowPresetFromLGraph,
@@ -54,6 +59,7 @@ const PIN_COLORS: Record<string, string> = {
   media_asset: '#ff6b6b',
   selection_source: '#c084fc',
   decode_source: '#c084fc',
+  playback_source: '#1dd1a1',
   selected_track: '#7c5cff',
   media_selection: '#feca57',
   track_list: '#a29bfe',
@@ -84,20 +90,7 @@ const PIN_COLORS: Record<string, string> = {
 
 const BYTE_DATA_LITEGRAPH_TYPES = [
   'byte_data',
-  'buffer',
-  'media_source',
-  'media_asset',
-  'media_selection',
-  'encoded_packets',
-  'decoded_video_frames',
-  'pcm_audio',
-  'encoded_track',
-  'media_file',
-  'compressed',
-  'video_frame',
-  'audio_buffer',
-  'nal_units',
-  'sei_payload',
+  ...BYTE_PRODUCING_PIN_TYPES,
 ].join(',');
 
 const TIMELINE_NODE_IDS = new Set([
@@ -110,6 +103,7 @@ function liteGraphInputType(pinType: string): string {
   if (pinType === 'byte_data') return BYTE_DATA_LITEGRAPH_TYPES;
   if (pinType === 'selection_source') return 'media_asset,selected_track';
   if (pinType === 'decode_source') return 'media_asset,media_selection';
+  if (pinType === 'playback_source') return 'media_file,media_source';
   return pinType;
 }
 
@@ -414,6 +408,42 @@ function summarizeDisplayEvent(event: NodeExecutionEvent): string[] {
       `${frame?.displayWidth ?? '?'}×${frame?.displayHeight ?? '?'} · ${String(frame?.format ?? 'frame')}`,
       String(frame?.sourceSampleId ?? 'decoded frame'),
     ];
+  }
+
+  if (event.node.id === 'wav_player') {
+    try {
+      const payload = JSON.parse(String(event.outputs.preview ?? '{}')) as {
+        fileName?: string;
+        sampleRate?: number;
+        channels?: number;
+        durationMs?: number;
+      };
+      return [
+        String(payload.fileName ?? 'audio.wav'),
+        `${payload.sampleRate ?? '?'} Hz · ${payload.channels ?? '?'} ch`,
+        `${((payload.durationMs ?? 0) / 1000).toFixed(2)} s`,
+      ];
+    } catch {
+      return ['WAV ready', 'Use viewport player'];
+    }
+  }
+
+  if (event.node.id === 'mp4_player') {
+    try {
+      const payload = JSON.parse(String(event.outputs.preview ?? '{}')) as {
+        fileName?: string;
+        durationMs?: number;
+        videoTrackCount?: number;
+        audioTrackCount?: number;
+      };
+      return [
+        String(payload.fileName ?? 'video.mp4'),
+        `${payload.videoTrackCount ?? 0} video · ${payload.audioTrackCount ?? 0} audio`,
+        `${((payload.durationMs ?? 0) / 1000).toFixed(2)} s`,
+      ];
+    } catch {
+      return ['MP4 ready', 'Use viewport player'];
+    }
   }
 
   return [

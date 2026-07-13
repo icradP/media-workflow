@@ -1,2 +1,2 @@
-export { encodeWav } from './wav.js';
-export type { WavSampleFormat } from './wav.js';
+export { encodeWav, parseWavMetadata } from './wav.js';
+export type { WavSampleFormat, WavMetadata } from './wav.js';

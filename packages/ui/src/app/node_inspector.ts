@@ -34,6 +34,22 @@ const PARAM_LABELS: Record<string, Record<string, string>> = {
     startTimeSeconds: '起始时间 (秒)',
     endTimeSeconds: '结束时间 (秒)',
   },
+  wav_player: {
+    autoplay: '自动播放',
+  },
+  mp4_player: {
+    autoplay: '自动播放',
+  },
+  mp4_muxer: {
+    fileName: '文件名',
+    includeVideo: '包含视频轨',
+    includeAudio: '包含音频轨',
+    videoTrackIndex: '视频轨序号',
+    audioTrackIndex: '音频轨序号',
+    startTimeSeconds: '起始时间 (秒)',
+    endTimeSeconds: '结束时间 (秒)',
+    alignMode: '音视频对齐',
+  },
 };
 
 const TIMELINE_NODE_IDS = new Set(['media_select', 'video_decode', 'audio_decode']);
@@ -46,6 +62,12 @@ const FRAME_TYPE_LABELS: Record<string, string> = {
   P: 'P 帧',
   B: 'B 帧',
   IDR: 'IDR 帧',
+};
+
+const ALIGN_MODE_LABELS: Record<string, string> = {
+  none: '不裁剪（各轨保持原时长）',
+  trim_to_video: '以视频时长裁剪音频',
+  trim_to_audio: '以音频时长裁剪视频',
 };
 
 interface InspectorNodeLike {
@@ -219,7 +241,7 @@ function createParamField(
     for (const value of param.values) {
       const option = document.createElement('option');
       option.value = value;
-      option.textContent = FRAME_TYPE_LABELS[value] ?? value;
+      option.textContent = enumOptionLabel(definitionId, paramKey, value) ?? value;
       select.append(option);
     }
     select.value = String(node.properties[paramKey] ?? param.default);
@@ -279,7 +301,9 @@ function applyParamValue(
 
 function formatParamValue(value: unknown, param: NodeParamDef): string {
   if (param.type === 'enum') {
-    return FRAME_TYPE_LABELS[String(value)] ?? String(value);
+    return enumOptionLabel('', param.name, String(value)) ??
+      FRAME_TYPE_LABELS[String(value)] ??
+      String(value);
   }
   if (param.type === 'boolean') {
     return value ? '是' : '否';
@@ -293,4 +317,13 @@ function escapeHtml(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function enumOptionLabel(
+  definitionId: string,
+  paramKey: string,
+  value: string,
+): string | undefined {
+  if (paramKey === 'alignMode') return ALIGN_MODE_LABELS[value];
+  return FRAME_TYPE_LABELS[value];
 }

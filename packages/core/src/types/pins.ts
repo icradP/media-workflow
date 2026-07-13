@@ -60,6 +60,7 @@ export type DataPinType =
   | 'pcm_audio'
   | 'encoded_track'
   | 'media_file'
+  | 'playback_source'
   | 'media'
   | 'stream'
   | 'frames'
@@ -100,6 +101,7 @@ export interface PinDataMap {
   pcm_audio: PcmAudioClip;
   encoded_track: EncodedTrack;
   media_file: MediaFile;
+  playback_source: MediaFile | MediaSource;
   media: MediaAnalysisResult;
   stream: StreamInfo;
   frames: FrameInfo[];

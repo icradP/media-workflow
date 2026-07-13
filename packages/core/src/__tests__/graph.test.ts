@@ -111,9 +111,17 @@ describe('byte-producing pin compatibility', () => {
     'buffer',
     'media_source',
     'media_asset',
+    'selected_track',
+    'media_selection',
     'media_samples',
     'compressed',
+    'encoded_packets',
+    'decoded_video',
+    'decoded_video_frames',
     'video_frame',
+    'pcm_audio',
+    'encoded_track',
+    'media_file',
     'audio_buffer',
     'nal_units',
     'sei_payload',
@@ -123,6 +131,13 @@ describe('byte-producing pin compatibility', () => {
 
   it('rejects values without a byte representation', () => {
     expect(arePinTypesCompatible('media_track', 'byte_data')).toBe(false);
+    expect(arePinTypesCompatible('track_list', 'byte_data')).toBe(false);
     expect(arePinTypesCompatible('number', 'byte_data')).toBe(false);
+  });
+
+  it('connects WAV playback sources', () => {
+    expect(arePinTypesCompatible('media_file', 'playback_source')).toBe(true);
+    expect(arePinTypesCompatible('media_source', 'playback_source')).toBe(true);
+    expect(arePinTypesCompatible('pcm_audio', 'playback_source')).toBe(false);
   });
 });

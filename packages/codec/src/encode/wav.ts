@@ -1,6 +1,36 @@
 import type { PcmAudioClip } from '@media-workflow/core';
+import { isWavSignature } from '../detect.js';
 
 export type WavSampleFormat = 'pcm16' | 'float32';
+
+export interface WavMetadata {
+  sampleRate: number;
+  channels: number;
+  bitsPerSample: number;
+  audioFormat: number;
+  dataSize: number;
+  durationMs: number;
+}
+
+export function parseWavMetadata(data: Uint8Array): WavMetadata | null {
+  if (!isWavSignature(data) || data.byteLength < 44) return null;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const audioFormat = view.getUint16(20, true);
+  const channels = view.getUint16(22, true);
+  const sampleRate = view.getUint32(24, true);
+  const byteRate = view.getUint32(28, true);
+  const bitsPerSample = view.getUint16(34, true);
+  const dataSize = view.getUint32(40, true);
+  const durationMs = byteRate > 0 ? (dataSize / byteRate) * 1_000 : 0;
+  return {
+    sampleRate,
+    channels,
+    bitsPerSample,
+    audioFormat,
+    dataSize,
+    durationMs,
+  };
+}
 
 export function encodeWav(
   clip: PcmAudioClip,

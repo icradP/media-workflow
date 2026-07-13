@@ -73,24 +73,22 @@ export const videoDecodeNode: NodeDefinition<
     const source = inputs.source as MediaAsset | MediaSelection | undefined;
     if (!source) throw new Error('VideoDecode: asset or media selection is required');
 
-    const selection = isMediaSelection(source)
-      ? source
-      : materializeMediaSelection(
-        selectTrack(source, {
-          trackId: String(params.trackId ?? ''),
-          kind: 'video',
-          index: Number(params.trackIndex),
-        }),
-        {
-          startIndex: Number(params.startIndex),
-          endIndex: optionalUpperBound(params.endIndex),
-          startTimeUs: Math.max(0, Number(params.startTimeSeconds) || 0) * 1_000_000,
-          endTimeUs: secondsToOptionalUs(params.endTimeSeconds),
-          frameType: String(params.frameType) as never,
-          limit: optionalUpperBound(params.limit),
-          order: 'presentation',
-        },
-      );
+    const selectedTrack = isMediaSelection(source)
+      ? source.selectedTrack
+      : selectTrack(source, {
+        trackId: String(params.trackId ?? ''),
+        kind: 'video',
+        index: Number(params.trackIndex),
+      });
+    const selection = materializeMediaSelection(selectedTrack, {
+      startIndex: Number(params.startIndex),
+      endIndex: optionalUpperBound(params.endIndex),
+      startTimeUs: secondsToUs(params.startTimeSeconds),
+      endTimeUs: secondsToOptionalUs(params.endTimeSeconds),
+      frameType: String(params.frameType) as never,
+      limit: optionalUpperBound(params.limit),
+      order: 'presentation',
+    });
 
     const { asset, track } = selection.selectedTrack;
     if (track.kind !== 'video') {
@@ -129,6 +127,10 @@ function isMediaSelection(value: MediaAsset | MediaSelection): value is MediaSel
 function optionalUpperBound(value: unknown): number | undefined {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? Math.floor(number) : undefined;
+}
+
+function secondsToUs(value: unknown): number {
+  return Math.max(0, Number(value) || 0) * 1_000_000;
 }
 
 function secondsToOptionalUs(value: unknown): number | undefined {

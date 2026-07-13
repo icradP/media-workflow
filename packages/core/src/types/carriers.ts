@@ -354,10 +354,14 @@ export type ByteData =
   | MediaSource
   | MediaAsset
   | MediaSelection
+  | SelectedTrack
   | MediaSample[]
+  | EncodedPacket[]
   | CompressedFrame
   | VideoFrameData
   | DecodedVideoFrame
+  | DecodedVideoClip
+  | PcmAudioClip
   | AudioBufferData
   | NalUnitData
   | SeiPayloadData

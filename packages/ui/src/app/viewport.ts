@@ -20,6 +20,8 @@ const renderers = new Map<string, NodeRenderer>([
   ['media_select', renderSampleTableEvent],
   ['hex_view', renderHexEvent],
   ['video_preview', renderYuvPreviewEvent],
+  ['wav_player', renderWavPlayerEvent],
+  ['mp4_player', renderMp4PlayerEvent],
   ['file_export', renderFileExportEvent],
 ]);
 
@@ -249,6 +251,108 @@ function renderYuvPreviewEvent(event: NodeExecutionEvent, element: HTMLElement):
   } catch {
     element.innerHTML = `<pre class="viewport-hex">${escapeHtml(raw)}</pre>`;
   }
+}
+
+function renderWavPlayerEvent(event: NodeExecutionEvent, element: HTMLElement): void {
+  const raw = event.outputs.preview;
+  if (typeof raw !== 'string') return;
+
+  try {
+    const payload = JSON.parse(raw) as {
+      fileName: string;
+      mimeType: string;
+      byteLength: number;
+      sampleRate: number;
+      channels: number;
+      bitsPerSample: number;
+      durationMs: number;
+      autoplay?: boolean;
+    };
+    const file = resolveWavPlaybackFile(event.inputs.source);
+    if (!file) {
+      element.innerHTML = '<p class="viewport-note">WAV bytes are not available in this view.</p>';
+      return;
+    }
+
+    const blob = new Blob([file.data.slice()], { type: payload.mimeType || 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+    const audioId = `wav-player-${event.nodeId}`;
+    element.innerHTML = `
+      <h4 class="viewport-title">WAV Player</h4>
+      <dl class="viewport-dl">
+        <div><dt>File</dt><dd>${escapeHtml(payload.fileName)}</dd></div>
+        <div><dt>Rate</dt><dd>${payload.sampleRate} Hz</dd></div>
+        <div><dt>Channels</dt><dd>${payload.channels}</dd></div>
+        <div><dt>Duration</dt><dd>${formatSeconds(payload.durationMs / 1000)}</dd></div>
+        <div><dt>Bytes</dt><dd>${payload.byteLength}</dd></div>
+      </dl>
+      <audio id="${audioId}" class="viewport-audio" controls ${payload.autoplay ? 'autoplay' : ''} src="${url}"></audio>
+      <p class="viewport-note">Supports WAV Encoder output and loaded .wav media sources.</p>
+    `;
+    element.querySelector(`#${audioId}`)?.addEventListener('ended', () => {
+      URL.revokeObjectURL(url);
+    }, { once: true });
+  } catch {
+    element.innerHTML = `<pre class="viewport-hex">${escapeHtml(raw)}</pre>`;
+  }
+}
+
+function resolveWavPlaybackFile(
+  source: unknown,
+): { data: Uint8Array } | null {
+  if (!source || typeof source !== 'object') return null;
+  if ('data' in source && source.data instanceof Uint8Array) {
+    return { data: source.data };
+  }
+  return null;
+}
+
+function renderMp4PlayerEvent(event: NodeExecutionEvent, element: HTMLElement): void {
+  const raw = event.outputs.preview;
+  if (typeof raw !== 'string') return;
+
+  try {
+    const payload = JSON.parse(raw) as {
+      fileName: string;
+      mimeType: string;
+      byteLength: number;
+      durationMs: number;
+      trackCount: number;
+      videoTrackCount: number;
+      audioTrackCount: number;
+      autoplay?: boolean;
+    };
+    const file = resolveWavPlaybackFile(event.inputs.source);
+    if (!file) {
+      element.innerHTML = '<p class="viewport-note">MP4 bytes are not available in this view.</p>';
+      return;
+    }
+
+    const blob = new Blob([file.data.slice()], { type: payload.mimeType || 'video/mp4' });
+    const url = URL.createObjectURL(blob);
+    const videoId = `mp4-player-${event.nodeId}`;
+    element.innerHTML = `
+      <h4 class="viewport-title">MP4 Player</h4>
+      <dl class="viewport-dl">
+        <div><dt>File</dt><dd>${escapeHtml(payload.fileName)}</dd></div>
+        <div><dt>Tracks</dt><dd>${payload.videoTrackCount} video · ${payload.audioTrackCount} audio</dd></div>
+        <div><dt>Duration</dt><dd>${formatSeconds(payload.durationMs / 1000)}</dd></div>
+        <div><dt>Bytes</dt><dd>${payload.byteLength}</dd></div>
+      </dl>
+      <video id="${videoId}" class="viewport-video" controls ${payload.autoplay ? 'autoplay' : ''} src="${url}"></video>
+      <p class="viewport-note">Supports MP4 Muxer output and loaded .mp4 media sources.</p>
+    `;
+    element.querySelector(`#${videoId}`)?.addEventListener('ended', () => {
+      URL.revokeObjectURL(url);
+    }, { once: true });
+  } catch {
+    element.innerHTML = `<pre class="viewport-hex">${escapeHtml(raw)}</pre>`;
+  }
+}
+
+function formatSeconds(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0.00 s';
+  return `${seconds.toFixed(2)} s`;
 }
 
 function renderFileExportEvent(event: NodeExecutionEvent, element: HTMLElement): void {

@@ -40,8 +40,8 @@ export const audioDecodeNode: NodeDefinition<
     endTimeSeconds: {
       name: 'endTimeSeconds',
       type: 'number',
-      default: 5,
-      min: 0,
+      default: -1,
+      min: -1,
       step: 0.001,
     },
   },
@@ -50,21 +50,19 @@ export const audioDecodeNode: NodeDefinition<
     const source = inputs.source as MediaAsset | MediaSelection | undefined;
     if (!source) throw new Error('AudioDecode: asset or media selection is required');
 
-    const selection = isMediaSelection(source)
-      ? source
-      : materializeMediaSelection(
-        selectTrack(source, {
-          trackId: String(params.trackId ?? ''),
-          kind: 'audio',
-          index: Number(params.trackIndex),
-        }),
-        {
-          startTimeUs: Math.max(0, Number(params.startTimeSeconds) || 0) * 1_000_000,
-          endTimeUs: Math.max(0, Number(params.endTimeSeconds) || 0) * 1_000_000,
-          frameType: 'all',
-          order: 'presentation',
-        },
-      );
+    const selectedTrack = isMediaSelection(source)
+      ? source.selectedTrack
+      : selectTrack(source, {
+        trackId: String(params.trackId ?? ''),
+        kind: 'audio',
+        index: Number(params.trackIndex),
+      });
+    const selection = materializeMediaSelection(selectedTrack, {
+      startTimeUs: secondsToUs(params.startTimeSeconds),
+      endTimeUs: secondsToOptionalUs(params.endTimeSeconds),
+      frameType: 'all',
+      order: 'presentation',
+    });
 
     const { asset, track } = selection.selectedTrack;
     if (track.kind !== 'audio') {
@@ -103,4 +101,13 @@ export const audioDecodeNode: NodeDefinition<
 
 function isMediaSelection(value: MediaAsset | MediaSelection): value is MediaSelection {
   return 'selectionId' in value && 'selectedTrack' in value;
+}
+
+function secondsToUs(value: unknown): number {
+  return Math.max(0, Number(value) || 0) * 1_000_000;
+}
+
+function secondsToOptionalUs(value: unknown): number | undefined {
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1_000_000 : undefined;
 }

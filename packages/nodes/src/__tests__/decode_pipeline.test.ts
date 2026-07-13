@@ -11,9 +11,11 @@ import {
 import {
   createMemoryCache,
   executeGraph,
+  type MediaFile,
   type MediaSource,
   type NodeDefinition,
 } from '@media-workflow/core';
+import { isMp4OrFmp4Signature, parseMp4Metadata } from '@media-workflow/codec';
 import { instantiateWorkflowPreset, type WorkflowPreset } from '../preset.js';
 import { fileLoaderNode } from '../source/file_loader.js';
 import { nodeRegistry } from '../registry.js';
@@ -30,8 +32,11 @@ describe('decode pipeline nodes', () => {
       'audio_decode',
       'frame_extract',
       'video_preview',
+      'wav_player',
+      'mp4_player',
       'sample_table',
       'wav_encoder',
+      'mp4_muxer',
       'raw_yuv_exporter',
       'file_export',
     ];
@@ -133,6 +138,90 @@ describe('decode workflow presets', () => {
     expect(selection?.rangeEndUs).toBe(742_399_000);
     expect(selection?.samples.length).toBeGreaterThan(0);
   });
+
+  it('remuxes MP4 from the remux-mp4-selections preset', async () => {
+    const preset = readPreset('remux-mp4-selections.workflow.json');
+    const source = sourceFromFixture('tests/generated-av.mp4');
+    const results = await runPreset(preset, source);
+
+    const videoSelection = results.get('video-select')?.get('selection') as {
+      samples: unknown[];
+    } | undefined;
+    const audioSelection = results.get('audio-select')?.get('selection') as {
+      samples: unknown[];
+    } | undefined;
+    expect(videoSelection?.samples.length).toBeGreaterThan(0);
+    expect(audioSelection?.samples.length).toBeGreaterThan(0);
+
+    const file = results.get('mux')?.get('file') as MediaFile | undefined;
+    expect(file?.mimeType).toBe('video/mp4');
+    expect(file?.extension).toBe('mp4');
+    expect(file?.data.byteLength).toBeGreaterThan(1024);
+    expect(isMp4OrFmp4Signature(file!.data)).toBe(true);
+    expect(Number(file?.metadata.videoSampleCount)).toBeGreaterThan(0);
+    expect(Number(file?.metadata.audioSampleCount)).toBeGreaterThan(0);
+    expect(file?.metadata.alignMode).toBe('trim_to_video');
+
+    const metadata = parseMp4Metadata(file!.data);
+    expect(metadata?.trackCount).toBeGreaterThanOrEqual(2);
+    expect(metadata?.durationMs).toBeGreaterThan(0);
+
+    const preview = JSON.parse(String(results.get('play')?.get('preview')));
+    expect(preview.fileName).toBe('output.mp4');
+    expect(preview.durationMs).toBeGreaterThan(0);
+    expect(preview.videoTrackCount).toBeGreaterThan(0);
+    expect(preview.audioTrackCount).toBeGreaterThan(0);
+
+    const download = JSON.parse(String(results.get('download')?.get('download')));
+    expect(download.fileName).toBe('output.mp4');
+    expect(download.byteLength).toBe(file!.data.byteLength);
+  });
+
+  it('remuxes MP4 video with MP3 audio like the dual-file local workflow', async () => {
+    const preset: WorkflowPreset = {
+      version: 1,
+      name: 'Dual source MP4+MP3 mux',
+      nodes: [
+        { id: 'video-file', type: 'file_loader' },
+        { id: 'video-analyze', type: 'auto_analyze' },
+        { id: 'video-track', type: 'track_select', params: { kind: 'video', trackIndex: 0 } },
+        { id: 'video-select', type: 'media_select' },
+        { id: 'audio-file', type: 'file_loader' },
+        { id: 'audio-analyze', type: 'auto_analyze' },
+        { id: 'audio-track', type: 'track_select', params: { kind: 'audio', trackIndex: 0 } },
+        { id: 'audio-select', type: 'media_select' },
+        {
+          id: 'mux',
+          type: 'mp4_muxer',
+          params: { fileName: 'output.mp4', alignMode: 'trim_to_video' },
+        },
+        { id: 'play', type: 'mp4_player' },
+      ],
+      edges: [
+        { id: 'v1', sourceNodeId: 'video-file', sourceOutput: 'source', targetNodeId: 'video-analyze', targetInput: 'source' },
+        { id: 'v2', sourceNodeId: 'video-analyze', sourceOutput: 'asset', targetNodeId: 'video-track', targetInput: 'asset' },
+        { id: 'v3', sourceNodeId: 'video-track', sourceOutput: 'selectedTrack', targetNodeId: 'video-select', targetInput: 'source' },
+        { id: 'v4', sourceNodeId: 'video-select', sourceOutput: 'selection', targetNodeId: 'mux', targetInput: 'video' },
+        { id: 'a1', sourceNodeId: 'audio-file', sourceOutput: 'source', targetNodeId: 'audio-analyze', targetInput: 'source' },
+        { id: 'a2', sourceNodeId: 'audio-analyze', sourceOutput: 'asset', targetNodeId: 'audio-track', targetInput: 'asset' },
+        { id: 'a3', sourceNodeId: 'audio-track', sourceOutput: 'selectedTrack', targetNodeId: 'audio-select', targetInput: 'source' },
+        { id: 'a4', sourceNodeId: 'audio-select', sourceOutput: 'selection', targetNodeId: 'mux', targetInput: 'audio' },
+        { id: 'p1', sourceNodeId: 'mux', sourceOutput: 'file', targetNodeId: 'play', targetInput: 'source' },
+      ],
+    };
+
+    const videoSource = sourceFromFixture('tests/generated-av.mp4');
+    const audioSource = sourceFromFixture('tests/Duvet.mp3');
+    const results = await runDualSourcePreset(preset, videoSource, audioSource);
+
+    const file = results.get('mux')?.get('file') as MediaFile | undefined;
+    expect(file?.data.byteLength).toBeGreaterThan(1024);
+    expect(isMp4OrFmp4Signature(file!.data)).toBe(true);
+    expect(Number(file?.metadata.audioSampleCount)).toBeGreaterThan(0);
+
+    const preview = JSON.parse(String(results.get('play')?.get('preview')));
+    expect(preview.durationMs).toBeGreaterThan(0);
+  });
 });
 
 async function runPreset(
@@ -147,6 +236,36 @@ async function runPreset(
   } as NodeDefinition;
   const graph = instantiateWorkflowPreset(preset, {
     nodeOverrides: new Map([['file', sourceNode]]),
+  });
+  return executeGraph(
+    graph,
+    createMemoryCache(),
+    new AbortController().signal,
+  );
+}
+
+async function runDualSourcePreset(
+  preset: WorkflowPreset,
+  videoSource: MediaSource,
+  audioSource: MediaSource,
+) {
+  const videoLoader: NodeDefinition = {
+    ...fileLoaderNode,
+    async execute() {
+      return { source: videoSource };
+    },
+  } as NodeDefinition;
+  const audioLoader: NodeDefinition = {
+    ...fileLoaderNode,
+    async execute() {
+      return { source: audioSource };
+    },
+  } as NodeDefinition;
+  const graph = instantiateWorkflowPreset(preset, {
+    nodeOverrides: new Map([
+      ['video-file', videoLoader],
+      ['audio-file', audioLoader],
+    ]),
   });
   return executeGraph(
     graph,

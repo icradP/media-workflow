@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "name": "Remux MP4 Selections",
+  "description": "Select video and audio ranges independently, remux to MP4, play and export.",
+  "nodes": [
+    { "id": "file", "type": "file_loader", "position": [80, 220] },
+    { "id": "analyze", "type": "auto_analyze", "position": [360, 220] },
+    {
+      "id": "video-track",
+      "type": "track_select",
+      "position": [640, 80],
+      "params": { "kind": "video", "trackIndex": 0 }
+    },
+    {
+      "id": "audio-track",
+      "type": "track_select",
+      "position": [640, 360],
+      "params": { "kind": "audio", "trackIndex": 0 }
+    },
+    {
+      "id": "video-select",
+      "type": "media_select",
+      "position": [920, 80],
+      "params": {
+        "startTimeSeconds": 0,
+        "endTimeSeconds": -1,
+        "frameType": "all",
+        "limit": -1
+      }
+    },
+    {
+      "id": "audio-select",
+      "type": "media_select",
+      "position": [920, 360],
+      "params": {
+        "startTimeSeconds": 0,
+        "endTimeSeconds": -1,
+        "limit": -1
+      }
+    },
+    {
+      "id": "mux",
+      "type": "mp4_muxer",
+      "position": [1200, 220],
+      "params": {
+        "fileName": "output.mp4",
+        "alignMode": "trim_to_video"
+      }
+    },
+    { "id": "play", "type": "mp4_player", "position": [1480, 120] },
+    { "id": "download", "type": "file_export", "position": [1480, 320] }
+  ],
+  "edges": [
+    {
+      "id": "file-analyze",
+      "sourceNodeId": "file",
+      "sourceOutput": "source",
+      "targetNodeId": "analyze",
+      "targetInput": "source"
+    },
+    {
+      "id": "analyze-video-track",
+      "sourceNodeId": "analyze",
+      "sourceOutput": "asset",
+      "targetNodeId": "video-track",
+      "targetInput": "asset"
+    },
+    {
+      "id": "analyze-audio-track",
+      "sourceNodeId": "analyze",
+      "sourceOutput": "asset",
+      "targetNodeId": "audio-track",
+      "targetInput": "asset"
+    },
+    {
+      "id": "video-track-select",
+      "sourceNodeId": "video-track",
+      "sourceOutput": "selectedTrack",
+      "targetNodeId": "video-select",
+      "targetInput": "source"
+    },
+    {
+      "id": "audio-track-select",
+      "sourceNodeId": "audio-track",
+      "sourceOutput": "selectedTrack",
+      "targetNodeId": "audio-select",
+      "targetInput": "source"
+    },
+    {
+      "id": "video-select-mux",
+      "sourceNodeId": "video-select",
+      "sourceOutput": "selection",
+      "targetNodeId": "mux",
+      "targetInput": "video"
+    },
+    {
+      "id": "audio-select-mux",
+      "sourceNodeId": "audio-select",
+      "sourceOutput": "selection",
+      "targetNodeId": "mux",
+      "targetInput": "audio"
+    },
+    {
+      "id": "mux-play",
+      "sourceNodeId": "mux",
+      "sourceOutput": "file",
+      "targetNodeId": "play",
+      "targetInput": "source"
+    },
+    {
+      "id": "mux-download",
+      "sourceNodeId": "mux",
+      "sourceOutput": "file",
+      "targetNodeId": "download",
+      "targetInput": "file"
+    }
+  ]
+}

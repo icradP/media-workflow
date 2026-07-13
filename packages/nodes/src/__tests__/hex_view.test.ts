@@ -118,4 +118,94 @@ describe('Hex View byte adapters', () => {
       hex: '02 03 04',
     });
   });
+
+  it('reads decoded clips, PCM clips, tracks, and encoded packets', () => {
+    expect(extractByteView({
+      requestId: 'req-1',
+      backend: {
+        id: 'mock',
+        version: '1',
+        api: 'mock',
+        codecFamilies: ['h264'],
+        inputFormats: ['annexb'],
+        outputFormats: ['I420'],
+      },
+      frames: [{
+        frameId: 'f0',
+        sourceSampleId: 's0',
+        ptsUs: 0,
+        codedWidth: 1,
+        codedHeight: 1,
+        displayWidth: 1,
+        displayHeight: 1,
+        format: 'I420',
+        planes: [Uint8Array.of(1, 2), Uint8Array.of(3)],
+        strides: [1, 1],
+        metadata: {},
+      }],
+      diagnostics: [],
+    }).data).toEqual(Uint8Array.of(1, 2, 3));
+
+    expect(extractByteView({
+      clipId: 'pcm-1',
+      sourceTrackId: 'audio',
+      ptsUs: 0,
+      durationUs: 1,
+      sampleRate: 48_000,
+      channels: 1,
+      sampleCount: 1,
+      format: 'f32-planar',
+      planes: [new Float32Array([1.25])],
+      backend: {
+        id: 'mock',
+        version: '1',
+        api: 'mock',
+        codecFamilies: ['pcm'],
+        inputFormats: ['unknown'],
+        outputFormats: ['f32-planar'],
+      },
+      diagnostics: [],
+    }).sourceType).toBe('PcmAudioClip.f32-planar');
+
+    expect(extractByteView({
+      selectedTrackId: 'asset:video:0',
+      asset: { source } as MediaAsset,
+      track: {
+        trackId: 'video',
+        index: 0,
+        kind: 'video',
+        codec: 'H.264',
+        codecFamily: 'h264',
+        codecConfig: null,
+        sampleCount: 1,
+        metadata: {},
+      },
+      samples: [{
+        sampleId: 'one',
+        index: 0,
+        trackId: 'video',
+        ptsUs: 0,
+        dtsUs: 0,
+        offset: 10,
+        size: 2,
+        isKey: true,
+        data: Uint8Array.of(0x65, 0x01),
+        metadata: {},
+      }],
+      diagnostics: [],
+    }).data).toEqual(Uint8Array.of(0x65, 0x01));
+
+    expect(extractByteView([{
+      packetId: 'p0',
+      sourceSampleId: 's0',
+      trackId: 'video',
+      codecFamily: 'h264',
+      bitstreamFormat: 'annexb',
+      data: Uint8Array.of(0, 0, 1, 0x65),
+      ptsUs: 0,
+      dtsUs: 0,
+      isKey: true,
+      metadata: {},
+    }]).sourceType).toBe('EncodedPacket[1]');
+  });
 });

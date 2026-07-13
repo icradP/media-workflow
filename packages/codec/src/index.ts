@@ -9,7 +9,7 @@ export * from './ts/index.js';
 export * from './ps/index.js';
 export * from './mp4/index.js';
 export * from './audio/index.js';
-export { detectContainerFormat } from './detect.js';
+export { detectContainerFormat, isMp4OrFmp4Signature, isWavSignature } from './detect.js';
 export type { DetectedFormat } from './detect.js';
 export { analyzeByDetectedFormat } from './analyze.js';
 export { analyzeMediaSource } from './analyze.js';

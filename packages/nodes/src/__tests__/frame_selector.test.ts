@@ -70,6 +70,14 @@ describe('MediaSelection', () => {
     expect(selected.map(item => item.index)).toEqual([2]);
   });
 
+  it('treats endTimeSeconds -1 as open-ended through track end', async () => {
+    const selected = await execute({
+      startTimeSeconds: 0,
+      endTimeSeconds: -1,
+    });
+    expect(selected.map(item => item.index)).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
   it('filters key and non-key samples', async () => {
     expect((await execute({ frameType: 'key' })).map(item => item.index)).toEqual([0, 3]);
     expect((await execute({ frameType: 'non_key' })).map(item => item.index)).toEqual([

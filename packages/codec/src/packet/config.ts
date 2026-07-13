@@ -113,6 +113,9 @@ export function resolveAudioBitstreamFormat(
     if (containerFormat === 'mpegts' || containerFormat === 'mpegps') return 'adts';
     return 'aac_raw';
   }
+  if (codecFamily === 'mp3') {
+    return 'mp3';
+  }
   return 'unknown';
 }
 
