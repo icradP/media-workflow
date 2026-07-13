@@ -42,3 +42,17 @@ export function concatPlanarFloat32(chunks: Float32Array[][]): Float32Array[] {
   }
   return result;
 }
+
+export function float32PlanarToInterleaved(
+  planes: Float32Array[],
+  channels: number,
+  sampleCount = planes[0]?.length ?? 0,
+): Float32Array {
+  const interleaved = new Float32Array(sampleCount * channels);
+  for (let sample = 0; sample < sampleCount; sample++) {
+    for (let channel = 0; channel < channels; channel++) {
+      interleaved[sample * channels + channel] = planes[channel]?.[sample] ?? 0;
+    }
+  }
+  return interleaved;
+}

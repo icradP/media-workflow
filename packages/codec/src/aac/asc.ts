@@ -99,3 +99,20 @@ export function parseAudioSpecificConfig(
 
   return c;
 }
+
+/** Build a 2-byte AudioSpecificConfig from the first ADTS frame in a buffer. */
+export function buildAscFromAdts(data: Uint8Array): Uint8Array | null {
+  for (let offset = 0; offset + 7 <= Math.min(data.length, 256); offset++) {
+    if (data[offset] !== 0xff || (data[offset + 1]! & 0xf6) !== 0xf0) continue;
+    const profile = ((data[offset + 2]! >> 6) & 0x03) + 1;
+    const sampleRateIndex = (data[offset + 2]! >> 2) & 0x0f;
+    const channels =
+      ((data[offset + 2]! & 0x01) << 2) |
+      ((data[offset + 3]! >> 6) & 0x03);
+    const asc = new Uint8Array(2);
+    asc[0] = ((profile & 0x1f) << 3) | ((sampleRateIndex & 0x0e) >> 1);
+    asc[1] = ((sampleRateIndex & 0x01) << 7) | ((channels & 0x0f) << 3);
+    return asc;
+  }
+  return null;
+}

@@ -15,6 +15,7 @@ import { mp4PlayerNode } from './display/mp4_player.js';
 import { streamOverviewNode } from './display/stream_info.js';
 import { trackDetailNode } from './display/track_detail.js';
 import { wavEncoderNode } from './encoder/wav.js';
+import { aacTranscodeNode } from './encoder/aac_transcode.js';
 import { mp4MuxerNode } from './encoder/mp4_muxer.js';
 import { rawYuvExporterNode } from './export/raw_yuv.js';
 import { fileExportNode } from './export/file_export.js';
@@ -36,6 +37,7 @@ export const allNodes: NodeDefinition[] = [
   streamOverviewNode,
   trackDetailNode,
   wavEncoderNode,
+  aacTranscodeNode,
   mp4MuxerNode,
   rawYuvExporterNode,
   fileExportNode,

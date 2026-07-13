@@ -5,6 +5,7 @@ import type {
   NodeDefinition,
 } from '@media-workflow/core';
 import {
+  decodeMp3SamplesToPcm,
   materializeMediaSelection,
   planAudioDecodeRequest,
   selectTrack,
@@ -68,13 +69,31 @@ export const audioDecodeNode: NodeDefinition<
     if (track.kind !== 'audio') {
       throw new Error(`AudioDecode: selection track ${track.trackId} is not audio`);
     }
-    if (!track.decoderConfig) {
-      throw new Error(`AudioDecode: track ${track.trackId} has no decoder configuration`);
-    }
 
     const rangeEndUs = selection.rangeEndUs ??
       selection.samples.at(-1)?.ptsUs ??
       selection.rangeStartUs;
+
+    if (track.codecFamily === 'mp3') {
+      const pcm = await decodeMp3SamplesToPcm({
+        samples: selection.samples,
+        rangeStartUs: selection.rangeStartUs,
+        rangeEndUs,
+        sourceTrackId: track.trackId,
+        requestId: `${selection.selectionId}:audio`,
+        sampleRate: track.sampleRate,
+        channels: track.channels,
+      });
+      return {
+        audio: { ...pcm, selectionId: selection.selectionId },
+        selection,
+      };
+    }
+
+    if (!track.decoderConfig) {
+      throw new Error(`AudioDecode: track ${track.trackId} has no decoder configuration`);
+    }
+
     const request = planAudioDecodeRequest({
       requestId: `${selection.selectionId}:audio`,
       track: track as AudioMediaTrack,

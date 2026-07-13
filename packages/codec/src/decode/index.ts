@@ -6,8 +6,13 @@ export {
 export {
   concatPlanarFloat32,
   float32InterleavedToPlanar,
+  float32PlanarToInterleaved,
   int16ToFloat32Planar,
 } from './pcm.js';
+export {
+  decodeAudioSelectionToPcm,
+  resolveAudioSelection,
+} from './audio_selection.js';
 export {
   copyVideoFrame,
   copyVideoFrameToI420,

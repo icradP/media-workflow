@@ -67,6 +67,7 @@ function stripFlvAvcWrapper(
   data: Uint8Array,
   metadata: Record<string, unknown>,
 ): Uint8Array {
+  if (metadata.dataOrigin === 'demuxed_payload') return data;
   if (metadata['flvAvcPacketType'] === 1 && data.byteLength > 4) {
     return data.subarray(4);
   }

@@ -113,7 +113,7 @@ function findFirstMp3Frame(data: Uint8Array): number {
   return -1;
 }
 
-function parseMp3FrameHeader(data: Uint8Array, offset: number): Mp3FrameHeader | null {
+export function parseMp3FrameHeader(data: Uint8Array, offset: number): Mp3FrameHeader | null {
   if (offset + 4 > data.length) return null;
   const header =
     (data[offset]! << 24) |

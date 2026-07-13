@@ -50,9 +50,16 @@ const PARAM_LABELS: Record<string, Record<string, string>> = {
     endTimeSeconds: '结束时间 (秒)',
     alignMode: '音视频对齐',
   },
+  aac_transcode: {
+    trackId: '轨道 ID',
+    trackIndex: '轨道序号',
+    startTimeSeconds: '起始时间 (秒)',
+    endTimeSeconds: '结束时间 (秒)',
+    bitrate: '码率 (bps)',
+  },
 };
 
-const TIMELINE_NODE_IDS = new Set(['media_select', 'video_decode', 'audio_decode']);
+const TIMELINE_NODE_IDS = new Set(['media_select', 'video_decode', 'audio_decode', 'aac_transcode']);
 
 const FRAME_TYPE_LABELS: Record<string, string> = {
   all: '全部',

@@ -4,6 +4,7 @@
 
 import type { MediaAnalysisResult, StreamInfo, FrameInfo, MediaFormat } from '@media-workflow/core';
 import type { H264SpsResult } from '../types.js';
+import { parseMp3FrameHeader } from '../audio/minimal.js';
 import { parseFlvTagAt, type ParsedFlvTag } from './tag.js';
 
 // ─── FLV File Header ───
@@ -46,6 +47,8 @@ export function parseFlvFileForAnalysis(fileBytes: Uint8Array): MediaAnalysisRes
   let videoCodecConfig: Uint8Array | null = null;
   let audioCodecConfig: Uint8Array | null = null;
   let frameIndex = 0;
+  let audioSoundFormat: number | undefined;
+  let mp3AudioInfo: { sampleRate: number; channels: number } | undefined;
 
   while (offset + 11 <= fileBytes.length) {
     const tag = parseFlvTagAt(fileBytes, offset);
@@ -62,9 +65,15 @@ export function parseFlvFileForAnalysis(fileBytes: Uint8Array): MediaAnalysisRes
       }
     } else if (tag.tagType === 8) {
       hasAudio = true;
+      if (tag.soundFormat !== undefined && audioSoundFormat === undefined) {
+        audioSoundFormat = tag.soundFormat;
+      }
       if (tag.audioConfig && !audioConfig) audioConfig = tag.audioConfig;
       if (tag.aacSequenceHeader && !audioCodecConfig) {
         audioCodecConfig = tag.aacSequenceHeader;
+      }
+      if (tag.soundFormat === 2 && !mp3AudioInfo) {
+        mp3AudioInfo = inferMp3InfoFromFlvTag(fileBytes, tag);
       }
     }
 
@@ -118,22 +127,16 @@ export function parseFlvFileForAnalysis(fileBytes: Uint8Array): MediaAnalysisRes
   }
 
   if (hasAudio) {
-    streams.push({
-      index: hasVideo ? 1 : 0, sourceId: 'audio', kind: 'audio',
-      codec: 'AAC', codecFamily: 'aac', codecConfig: audioCodecConfig,
-      durationMs: maxTs,
-      sampleCount: frames.filter(frame => frame.kind === 'audio').length,
-      timeBase: { numerator: 1, denominator: 1_000 },
-      audio: audioConfig &&
-        Number(audioConfig._samplingFrequency_value) > 0 &&
-        Number(audioConfig._channelConfiguration_value) > 0
-        ? {
-            sampleRate: Number(audioConfig._samplingFrequency_value),
-            channels: Number(audioConfig._channelConfiguration_value),
-            profile: String(audioConfig.audioObjectTypeName ?? ''),
-          }
-        : undefined,
+    const audioMeta = resolveFlvAudioStreamInfo({
+      soundFormat: audioSoundFormat,
+      audioConfig,
+      audioCodecConfig,
+      mp3AudioInfo,
+      maxTs,
+      audioSampleCount: frames.filter(frame => frame.kind === 'audio').length,
+      hasVideo,
     });
+    streams.push(audioMeta);
   }
 
   for (const frame of frames) {
@@ -199,4 +202,86 @@ function extractMediaPayload(
 function signedInt24(high: number, middle: number, low: number): number {
   const value = (high << 16) | (middle << 8) | low;
   return (value & 0x800000) !== 0 ? value - 0x1000000 : value;
+}
+
+function inferMp3InfoFromFlvTag(
+  fileBytes: Uint8Array,
+  tag: ParsedFlvTag,
+): { sampleRate: number; channels: number } | undefined {
+  const bodyOffset = tag.offset + 11;
+  const bodyEnd = bodyOffset + tag.dataSize;
+  if (bodyEnd > fileBytes.byteLength || tag.dataSize <= 1) return undefined;
+  const payload = fileBytes.subarray(bodyOffset + 1, bodyEnd);
+  const header = parseMp3FrameHeader(payload, 0) ??
+    parseMp3FrameHeader(payload, 1);
+  if (!header) return undefined;
+  return { sampleRate: header.sampleRate, channels: header.channels };
+}
+
+function resolveFlvAudioStreamInfo(options: {
+  soundFormat?: number;
+  audioConfig: Record<string, unknown> | null;
+  audioCodecConfig: Uint8Array | null;
+  mp3AudioInfo?: { sampleRate: number; channels: number };
+  maxTs: number;
+  audioSampleCount: number;
+  hasVideo: boolean;
+}): StreamInfo {
+  const soundFormat = options.soundFormat ?? 10;
+  const index = options.hasVideo ? 1 : 0;
+
+  if (soundFormat === 2 || soundFormat === 14) {
+    return {
+      index,
+      sourceId: 'audio',
+      kind: 'audio',
+      codec: 'MP3',
+      codecFamily: 'mp3',
+      codecConfig: null,
+      durationMs: options.maxTs,
+      sampleCount: options.audioSampleCount,
+      timeBase: { numerator: 1, denominator: 1_000 },
+      metadata: { flvSoundFormat: soundFormat },
+      audio: options.mp3AudioInfo,
+    };
+  }
+
+  if (soundFormat === 7 || soundFormat === 8) {
+    const law = soundFormat === 7 ? 'alaw' : 'ulaw';
+    return {
+      index,
+      sourceId: 'audio',
+      kind: 'audio',
+      codec: law === 'alaw' ? 'G.711 A-law' : 'G.711 μ-law',
+      codecFamily: 'g711',
+      codecConfig: null,
+      durationMs: options.maxTs,
+      sampleCount: options.audioSampleCount,
+      timeBase: { numerator: 1, denominator: 8_000 },
+      metadata: { 'g711.law': law, flvSoundFormat: soundFormat },
+      audio: { sampleRate: 8_000, channels: 1 },
+    };
+  }
+
+  return {
+    index,
+    sourceId: 'audio',
+    kind: 'audio',
+    codec: 'AAC',
+    codecFamily: 'aac',
+    codecConfig: options.audioCodecConfig,
+    durationMs: options.maxTs,
+    sampleCount: options.audioSampleCount,
+    timeBase: { numerator: 1, denominator: 1_000 },
+    metadata: { flvSoundFormat: soundFormat },
+    audio: options.audioConfig &&
+      Number(options.audioConfig._samplingFrequency_value) > 0 &&
+      Number(options.audioConfig._channelConfiguration_value) > 0
+      ? {
+          sampleRate: Number(options.audioConfig._samplingFrequency_value),
+          channels: Number(options.audioConfig._channelConfiguration_value),
+          profile: String(options.audioConfig.audioObjectTypeName ?? ''),
+        }
+      : undefined,
+  };
 }

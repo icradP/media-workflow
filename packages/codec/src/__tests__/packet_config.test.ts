@@ -33,7 +33,7 @@ describe('decoder config and packet normalization', () => {
   });
 
   it('builds AAC decoder config for FLV fixtures', () => {
-    const asset = loadAsset('tests/869247060193353-ok.flv');
+    const asset = loadAsset('tests/generated-av.flv');
     const audioTrack = asset.tracks.find(track => track.kind === 'audio');
     expect(audioTrack?.decoderConfig).toBeDefined();
     expect(audioTrack?.decoderConfig?.codec).toMatch(/^mp4a\.40\./);

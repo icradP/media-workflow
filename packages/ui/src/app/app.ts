@@ -553,6 +553,7 @@ export function createApp(): MediaWorkflowApp {
     canvas = new LGraphCanvas(canvasElement, graph);
     canvas.background_image = '';
     canvas.render_canvas_border = false;
+    (canvas as LGraphCanvas & { allow_searchbox: boolean }).allow_searchbox = false;
     bindGraphCanvas(canvas);
 
     registerNodeTypes(

@@ -81,7 +81,7 @@ describe('decode pipeline nodes', () => {
 describe('decode workflow presets', () => {
   it('materializes a stable first-keyframe video selection for FLV', async () => {
     const preset = readPreset('decode-first-keyframe.workflow.json');
-    const source = sourceFromFixture('tests/869247060193353-ok.flv');
+    const source = sourceFromFixture('tests/generated-av.flv');
     const results = await runPreset(preset, source);
     const selection = results.get('selection')?.get('selection') as {
       selectionId: string;
@@ -127,15 +127,15 @@ describe('decode workflow presets', () => {
         },
       ],
     };
-    const source = sourceFromFixture('tests/869247060193353-ok.flv');
+    const source = sourceFromFixture('tests/generated-av.flv');
     const results = await runPreset(preset, source);
     const selection = results.get('selection')?.get('selection') as {
       rangeStartUs: number;
       rangeEndUs?: number;
       samples: unknown[];
     } | undefined;
-    expect(selection?.rangeStartUs).toBe(737_399_000);
-    expect(selection?.rangeEndUs).toBe(742_399_000);
+    expect(selection?.rangeStartUs).toBe(0);
+    expect(selection?.rangeEndUs).toBe(5_000_000);
     expect(selection?.samples.length).toBeGreaterThan(0);
   });
 

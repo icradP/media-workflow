@@ -7,6 +7,7 @@ import type {
   VideoMediaTrack,
 } from '@media-workflow/core';
 import { annexBToAvcc } from '../decode/bitstream.js';
+import { inferAudioCodecConfig, inferVideoCodecConfig } from '../codec_config/infer.js';
 import { sampleToEncodedPacket } from '../packet/normalize.js';
 import {
   buildFtyp,
@@ -128,16 +129,18 @@ export function remuxMediaAssetToMp4(
   const muxTracks: MuxTrack[] = [];
 
   if (videoTrack) {
+    const resolved = resolveTrackCodecConfig(videoTrack, asset) as VideoMediaTrack;
     muxTracks.push(buildMuxTrack(
-      videoTrack,
-      filterSamples(asset, videoTrack, startTimeUs, endTimeUs),
+      resolved,
+      filterSamples(asset, resolved, startTimeUs, endTimeUs),
       asset.container.format,
     ));
   }
   if (audioTrack) {
+    const resolved = resolveTrackCodecConfig(audioTrack, asset) as AudioMediaTrack;
     muxTracks.push(buildMuxTrack(
-      audioTrack,
-      filterSamples(asset, audioTrack, startTimeUs, endTimeUs),
+      resolved,
+      filterSamples(asset, resolved, startTimeUs, endTimeUs),
       asset.container.format,
     ));
   }
@@ -150,7 +153,8 @@ function buildMuxTrackFromSamples(
   expectedKind: 'video' | 'audio',
   samples: MediaSample[],
 ): MuxTrack {
-  const { track, asset } = selection.selectedTrack;
+  const { track: rawTrack, asset } = selection.selectedTrack;
+  const track = resolveTrackCodecConfig(rawTrack, asset) as VideoMediaTrack | AudioMediaTrack;
   if (track.kind !== expectedKind) {
     throw new Error(
       `RemuxMp4: expected ${expectedKind} selection, got ${track.kind} (${track.trackId})`,
@@ -168,7 +172,7 @@ function buildMuxTrackFromSamples(
   }
 
   return buildMuxTrack(
-    track as VideoMediaTrack | AudioMediaTrack,
+    track,
     samples,
     asset.container.format,
   );
@@ -183,7 +187,8 @@ function validateSelectionSamples(
   if (!samples || samples.length === 0) {
     throw new Error(`RemuxMp4: ${kind} selection ${selection.selectionId} is empty`);
   }
-  const { track } = selection.selectedTrack;
+  const { track: rawTrack, asset } = selection.selectedTrack;
+  const track = resolveTrackCodecConfig(rawTrack, asset);
   if (track.kind !== kind) {
     throw new Error(
       `RemuxMp4: expected ${kind} selection, got ${track.kind} (${track.trackId})`,
@@ -196,6 +201,25 @@ function validateSelectionSamples(
       throw new Error(`RemuxMp4: ${kind} track ${track.trackId} is missing codec configuration`);
     }
   }
+}
+
+function resolveTrackCodecConfig(
+  track: MediaTrack,
+  asset: MediaAsset,
+): MediaTrack {
+  if (track.kind === 'video') {
+    const codecConfig = inferVideoCodecConfig(track as VideoMediaTrack, asset.samples);
+    if (codecConfig?.byteLength && !track.codecConfig?.byteLength) {
+      return { ...track, codecConfig };
+    }
+  }
+  if (track.kind === 'audio') {
+    const codecConfig = inferAudioCodecConfig(track as AudioMediaTrack, asset, asset.samples);
+    if (codecConfig?.byteLength && !track.codecConfig?.byteLength) {
+      return { ...track, codecConfig };
+    }
+  }
+  return track;
 }
 
 function isMuxableAudioWithoutCodecConfig(track: AudioMediaTrack): boolean {
