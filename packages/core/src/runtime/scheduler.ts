@@ -26,7 +26,7 @@ export interface ExecutionPlan {
 export interface NodeExecutionEvent {
   nodeId: string;
   node: NodeDefinition;
-  status: 'completed' | 'cached' | 'failed';
+  status: 'started' | 'completed' | 'cached' | 'failed';
   inputs: Record<string, unknown>;
   params: Record<string, unknown>;
   outputs: Record<string, unknown>;
@@ -228,6 +228,17 @@ async function executeNode(
   // 执行
   const ctx = createContext(signal);
   const startedAt = performance.now();
+  onEvent?.({
+    nodeId,
+    node,
+    status: 'started',
+    inputs: inputValues,
+    params: paramValues,
+    outputs: {},
+    durationMs: 0,
+    cacheHit: false,
+    diagnostics: [],
+  });
   try {
     const rawResult = await node.execute(ctx, {
       inputs: inputValues as never,

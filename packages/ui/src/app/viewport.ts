@@ -38,6 +38,8 @@ export function clearViewport(): void {
 }
 
 export function renderExecutionEvent(event: NodeExecutionEvent): void {
+  if (event.status === 'started') return;
+
   if (event.status === 'failed') {
     renderFailureEvent(event);
     return;

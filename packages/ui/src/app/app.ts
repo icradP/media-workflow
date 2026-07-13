@@ -10,9 +10,13 @@ import {
   attachExecutionHighlight,
   clearNodeExecutionStates,
   clearNodeExecutionIgnored,
+  clearNodeExecutionRunning,
   collectIgnoredNodeIds,
   markNodeExecutionFailed,
+  markNodeExecutionRunning,
   setNodesExecutionIgnored,
+  startExecutionAnimation,
+  stopExecutionAnimation,
 } from './node_execution_state.js';
 import {
   attachNodeParamWidgets,
@@ -347,6 +351,10 @@ function drawDisplayPreview(node: LGraphNodeBase, context: CanvasRenderingContex
 }
 
 function summarizeDisplayEvent(event: NodeExecutionEvent): string[] {
+  if (event.status === 'started') {
+    return ['执行中…'];
+  }
+
   if (event.status === 'failed') {
     return ['执行失败', event.error?.message ?? 'Unknown error'];
   }
@@ -904,6 +912,7 @@ export function createApp(): MediaWorkflowApp {
     clearViewport();
     isRunning = true;
     setRunButtonDisabled(true);
+    startExecutionAnimation(canvas);
 
     setStatus(
       skipSummary
@@ -931,6 +940,8 @@ export function createApp(): MediaWorkflowApp {
     } finally {
       isRunning = false;
       setRunButtonDisabled(false);
+      stopExecutionAnimation();
+      canvas.setDirty(true, true);
     }
   }
 
@@ -990,6 +1001,20 @@ export function createApp(): MediaWorkflowApp {
     event: NodeExecutionEvent,
     skipSummary: string | undefined,
   ) {
+    if (event.status === 'started') {
+      markNodeExecutionRunning(graph, event.nodeId);
+      canvas.setDirty(true, true);
+      setStatus(
+        skipSummary
+          ? `正在执行 · ${event.node.displayName}（${skipSummary}）`
+          : `正在执行 · ${event.node.displayName}`,
+        'running',
+      );
+      return;
+    }
+
+    clearNodeExecutionRunning(graph, event.nodeId);
+
     if (event.status === 'failed') {
       const failedNode = markNodeExecutionFailed(
         graph,
@@ -1013,13 +1038,6 @@ export function createApp(): MediaWorkflowApp {
       );
       return;
     }
-
-    setStatus(
-      skipSummary
-        ? `正在执行 · ${event.node.displayName}（${skipSummary}）`
-        : `正在执行 · ${event.node.displayName}`,
-      'running',
-    );
   }
 
   function saveWorkflowToFile() {
@@ -1064,6 +1082,7 @@ export function createApp(): MediaWorkflowApp {
   }
 
   function updateFrameSelectorNodePreview(event: NodeExecutionEvent) {
+    if (event.status === 'started') return;
     if (!TIMELINE_NODE_IDS.has(event.node.id)) return;
     const node = (graph as unknown as { _nodes: FrameSelectorNode[] })._nodes.find(
       candidate => String(candidate.id) === event.nodeId,
@@ -1074,6 +1093,23 @@ export function createApp(): MediaWorkflowApp {
   }
 
   function updateDisplayNodePreview(event: NodeExecutionEvent) {
+    if (event.status === 'started') {
+      if (
+        event.node.category !== 'display' &&
+        event.node.category !== 'inspect' &&
+        event.node.id !== 'file_export'
+      ) {
+        return;
+      }
+      const node = (graph as unknown as { _nodes: LGraphNodeBase[] })._nodes.find(
+        candidate => String(candidate.id) === event.nodeId,
+      );
+      if (!node) return;
+      node.displayPreview = summarizeDisplayEvent(event);
+      canvas.setDirty(true, true);
+      return;
+    }
+
     if (
       event.node.category !== 'display' &&
       event.node.category !== 'inspect' &&

@@ -75,7 +75,7 @@ export function updateFrameSelectorPreviewFromEvent(
   node: FrameSelectorNode,
   event: NodeExecutionEvent,
 ): void {
-  if (event.status === 'failed') return;
+  if (event.status === 'failed' || event.status === 'started') return;
   const selection = event.outputs.selection as MediaSelection | undefined;
   if (!selection) return;
 

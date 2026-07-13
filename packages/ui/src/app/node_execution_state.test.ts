@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   clearNodeExecutionIgnored,
+  clearNodeExecutionRunning,
   clearNodeExecutionStates,
   collectIgnoredNodeIds,
   markNodeExecutionFailed,
+  markNodeExecutionRunning,
   setNodesExecutionIgnored,
   type ExecutionHighlightNode,
 } from './node_execution_state.js';
@@ -48,5 +50,21 @@ describe('node execution highlight', () => {
 
     clearNodeExecutionIgnored(graph);
     expect(collectIgnoredNodeIds(graph)).toEqual(new Set());
+  });
+
+  it('marks and clears running node state', () => {
+    const graph = {
+      _nodes: [
+        { id: 1, size: [240, 120] as [number, number] },
+      ] as ExecutionHighlightNode[],
+    };
+
+    const running = markNodeExecutionRunning(graph, '1');
+    expect(running?.executionState).toBe('running');
+    expect(running?.boxcolor).toBe('#7c5cff');
+
+    clearNodeExecutionRunning(graph, '1');
+    expect(graph._nodes[0]?.executionState).toBe('idle');
+    expect(graph._nodes[0]?.boxcolor).toBeUndefined();
   });
 });

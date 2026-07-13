@@ -56,7 +56,7 @@ describe('workflow runtime protocol', () => {
         targetInput: 'value',
       }],
     };
-    const events: Array<{ id: string; input?: unknown; output?: unknown }> = [];
+    const events: Array<{ id: string; status: string; input?: unknown; output?: unknown }> = [];
 
     await executeGraph(
       graph,
@@ -65,6 +65,7 @@ describe('workflow runtime protocol', () => {
       event => {
         events.push({
           id: event.nodeId,
+          status: event.status,
           input: event.inputs.value,
           output: event.outputs.label,
         });
@@ -72,8 +73,10 @@ describe('workflow runtime protocol', () => {
     );
 
     expect(events).toEqual([
-      { id: 'source', input: undefined, output: undefined },
-      { id: 'sink', input: 42, output: 'value=42' },
+      { id: 'source', status: 'started', input: undefined, output: undefined },
+      { id: 'source', status: 'completed', input: undefined, output: undefined },
+      { id: 'sink', status: 'started', input: 42, output: undefined },
+      { id: 'sink', status: 'completed', input: 42, output: 'value=42' },
     ]);
   });
 
@@ -123,12 +126,17 @@ describe('workflow runtime protocol', () => {
       createMemoryCache(),
       new AbortController().signal,
       event => {
-        events.push(event.nodeId);
+        events.push(`${event.nodeId}:${event.status}`);
       },
       { runnableNodeIds },
     );
 
-    expect(events).toEqual(['source', 'sink']);
+    expect(events).toEqual([
+      'source:started',
+      'source:completed',
+      'sink:started',
+      'sink:completed',
+    ]);
     expect(results.has('orphan')).toBe(false);
     expect(results.get('sink')?.get('label')).toBe('value=42');
   });
