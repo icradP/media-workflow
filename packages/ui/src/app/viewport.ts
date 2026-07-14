@@ -7,7 +7,10 @@ import type {
   SelectedTrack,
   NodeExecutionEvent,
   VideoMediaTrack,
+  DecodedVideoClip,
+  DecodedVideoFrame,
 } from '@media-workflow/core';
+import { drawDecodedFrameToCanvas } from '@media-workflow/codec';
 
 type NodeRenderer = (event: NodeExecutionEvent, element: HTMLElement) => void;
 const resultElements = new Map<string, HTMLElement>();
@@ -206,49 +209,51 @@ function renderYuvPreviewEvent(event: NodeExecutionEvent, element: HTMLElement):
   if (typeof raw !== 'string') return;
   try {
     const preview = JSON.parse(raw) as {
-      sourceSampleId: string;
-      ptsUs: number;
-      displayWidth: number;
-      displayHeight: number;
-      format: string;
-      byteLength: number;
-    };
-    const canvasId = `yuv-canvas-${event.nodeId}`;
-    element.innerHTML = `
-      <h4 class="viewport-title">YUV Preview</h4>
-      <dl class="viewport-dl">
-        <div><dt>Sample</dt><dd>${escapeHtml(preview.sourceSampleId)}</dd></div>
-        <div><dt>PTS</dt><dd>${formatTimestamp(preview.ptsUs)}</dd></div>
-        <div><dt>Size</dt><dd>${preview.displayWidth}×${preview.displayHeight}</dd></div>
-        <div><dt>Format</dt><dd>${escapeHtml(preview.format)}</dd></div>
-        <div><dt>Bytes</dt><dd>${preview.byteLength}</dd></div>
-      </dl>
-      <canvas id="${canvasId}" class="viewport-canvas" width="${preview.displayWidth}" height="${preview.displayHeight}"></canvas>
-      <p class="viewport-note">Canvas rendering uses the decoded frame from the upstream decoder output.</p>
-    `;
-    const video = event.inputs.video as { frames?: Array<{
-      format?: string;
+      sourceSampleId?: string;
+      ptsUs?: number;
       displayWidth?: number;
       displayHeight?: number;
-      planes?: Uint8Array[];
-      strides?: number[];
-    }> } | undefined;
+      format?: string;
+      byteLength?: number;
+      mode?: string;
+      backend?: string;
+      liveStreamId?: string;
+    };
+    const canvasId = `yuv-canvas-${event.nodeId}`;
+    const width = preview.displayWidth ?? 320;
+    const height = preview.displayHeight ?? 180;
+    element.innerHTML = `
+      <h4 class="viewport-title">Video Preview · ${escapeHtml(preview.backend ?? 'webgpu')}</h4>
+      <dl class="viewport-dl">
+        <div><dt>Mode</dt><dd>${escapeHtml(preview.mode ?? 'batch')}</dd></div>
+        ${preview.sourceSampleId
+          ? `<div><dt>Sample</dt><dd>${escapeHtml(preview.sourceSampleId)}</dd></div>`
+          : ''}
+        ${preview.ptsUs !== undefined
+          ? `<div><dt>PTS</dt><dd>${formatTimestamp(preview.ptsUs)}</dd></div>`
+          : ''}
+        <div><dt>Size</dt><dd>${width}×${height}</dd></div>
+        ${preview.format
+          ? `<div><dt>Format</dt><dd>${escapeHtml(preview.format)}</dd></div>`
+          : ''}
+        ${preview.byteLength !== undefined
+          ? `<div><dt>Bytes</dt><dd>${preview.byteLength}</dd></div>`
+          : ''}
+        ${preview.liveStreamId
+          ? `<div><dt>Live</dt><dd>${escapeHtml(preview.liveStreamId)}</dd></div>`
+          : ''}
+      </dl>
+      <canvas id="${canvasId}" class="viewport-canvas" width="${width}" height="${height}"></canvas>
+      <p class="viewport-note">Node canvas uses WebGPU (Canvas2D fallback). Live Play paces frames via Ring Buffer.</p>
+    `;
+    const video = event.inputs.video as DecodedVideoClip | undefined;
     const requested = Math.max(0, Math.floor(Number(event.params.frameIndex) || 0));
     const frame = video?.frames?.[
       Math.min(Math.max(0, (video.frames?.length ?? 1) - 1), requested)
-    ];
+    ] as DecodedVideoFrame | undefined;
     if (frame?.planes && frame.displayWidth && frame.displayHeight) {
-      renderI420ToCanvas(
-        document.getElementById(canvasId) as HTMLCanvasElement | null,
-        frame.planes,
-        frame.displayWidth,
-        frame.displayHeight,
-        frame.strides ?? [
-          frame.displayWidth,
-          Math.ceil(frame.displayWidth / 2),
-          Math.ceil(frame.displayWidth / 2),
-        ],
-      );
+      const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+      if (canvas) void drawDecodedFrameToCanvas(canvas, frame);
     }
   } catch {
     element.innerHTML = `<pre class="viewport-hex">${escapeHtml(raw)}</pre>`;
@@ -385,49 +390,6 @@ function renderFileExportEvent(event: NodeExecutionEvent, element: HTMLElement):
   } catch {
     element.innerHTML = `<pre class="viewport-hex">${escapeHtml(raw)}</pre>`;
   }
-}
-
-function renderI420ToCanvas(
-  canvas: HTMLCanvasElement | null,
-  planes: Uint8Array[],
-  width: number,
-  height: number,
-  strides: number[],
-): void {
-  if (!canvas) return;
-  const context = canvas.getContext('2d');
-  if (!context) return;
-  const [yPlane, uPlane, vPlane] = planes;
-  if (!yPlane || !uPlane || !vPlane) return;
-  const yStride = strides[0] ?? width;
-  const uvWidth = Math.ceil(width / 2);
-  const uStride = strides[1] ?? uvWidth;
-  const vStride = strides[2] ?? uvWidth;
-  const image = context.createImageData(width, height);
-  const rgba = image.data;
-  for (let row = 0; row < height; row++) {
-    for (let col = 0; col < width; col++) {
-      const y = yPlane[row * yStride + col]!;
-      const u = uPlane[Math.floor(row / 2) * uStride + Math.floor(col / 2)]!;
-      const v = vPlane[Math.floor(row / 2) * vStride + Math.floor(col / 2)]!;
-      const c = y - 16;
-      const d = u - 128;
-      const e = v - 128;
-      const r = clampByte((298 * c + 409 * e + 128) >> 8);
-      const g = clampByte((298 * c - 100 * d - 208 * e + 128) >> 8);
-      const b = clampByte((298 * c + 516 * d + 128) >> 8);
-      const index = (row * width + col) * 4;
-      rgba[index] = r;
-      rgba[index + 1] = g;
-      rgba[index + 2] = b;
-      rgba[index + 3] = 255;
-    }
-  }
-  context.putImageData(image, 0, 0);
-}
-
-function clampByte(value: number): number {
-  return Math.max(0, Math.min(255, value));
 }
 
 function renderAssetSummary(

@@ -1,5 +1,6 @@
 import type {
   AudioMediaTrack,
+  CodecFamily,
   MediaAsset,
   MediaSample,
   MediaSelection,
@@ -9,6 +10,7 @@ import type {
 import { annexBToAvcc } from '../decode/bitstream.js';
 import { resolveTrackCodecConfig } from '../codec_config/infer.js';
 import { formatMuxAudioError, formatMuxVideoError } from './capabilities.js';
+import { buildDecoderConfig } from '../packet/config.js';
 import { sampleToEncodedPacket } from '../packet/normalize.js';
 import {
   buildFtyp,
@@ -99,6 +101,105 @@ export function remuxMediaSelectionsToMp4(
   }
 
   return finalizeMp4(muxTracks);
+}
+
+/** One encoded elementary stream ready for progressive / Live finalize mux. */
+export interface EncodedMuxTrackInput {
+  kind: 'video' | 'audio';
+  trackId?: string;
+  codec: string;
+  codecFamily: CodecFamily;
+  codecConfig: Uint8Array;
+  width?: number;
+  height?: number;
+  sampleRate?: number;
+  channels?: number;
+  packets: Array<{
+    data: Uint8Array;
+    ptsUs: number;
+    dtsUs: number;
+    durationUs: number;
+    isKey: boolean;
+  }>;
+}
+
+/**
+ * Mux pre-encoded H.264/AAC (or other muxable) packets into a progressive MP4.
+ * Used by Live record finalize and by batch paths that already hold EncodedTracks.
+ */
+export function muxEncodedTracksToMp4(
+  tracks: EncodedMuxTrackInput[],
+): RemuxMp4Result {
+  if (tracks.length === 0) {
+    throw new Error('MuxEncoded: at least one encoded track is required');
+  }
+
+  const muxTracks: MuxTrack[] = [];
+  for (const [index, input] of tracks.entries()) {
+    if (!input.packets.length) {
+      throw new Error(`MuxEncoded: ${input.kind} track has no packets`);
+    }
+    if (!input.codecConfig || input.codecConfig.byteLength === 0) {
+      throw new Error(`MuxEncoded: ${input.kind} track is missing codec configuration`);
+    }
+
+    const trackId = input.trackId ?? `encoded:${input.kind}:${index}`;
+    if (input.kind === 'video') {
+      const track: VideoMediaTrack = {
+        trackId,
+        index,
+        kind: 'video',
+        codec: input.codec,
+        codecFamily: input.codecFamily,
+        codecConfig: input.codecConfig,
+        width: input.width,
+        height: input.height,
+        sampleCount: input.packets.length,
+        metadata: {},
+      };
+      track.decoderConfig = buildDecoderConfig(track, 'mp4');
+      muxTracks.push(buildMuxTrack(track, encodedPacketsToSamples(trackId, input.packets), 'mp4'));
+    } else {
+      const track: AudioMediaTrack = {
+        trackId,
+        index,
+        kind: 'audio',
+        codec: input.codec,
+        codecFamily: input.codecFamily,
+        codecConfig: input.codecConfig,
+        sampleRate: input.sampleRate,
+        channels: input.channels,
+        sampleCount: input.packets.length,
+        metadata: {},
+      };
+      track.decoderConfig = buildDecoderConfig(track, 'mp4');
+      muxTracks.push(buildMuxTrack(track, encodedPacketsToSamples(trackId, input.packets), 'mp4'));
+    }
+  }
+
+  return finalizeMp4(muxTracks);
+}
+
+function encodedPacketsToSamples(
+  trackId: string,
+  packets: EncodedMuxTrackInput['packets'],
+): MediaSample[] {
+  return packets.map((packet, index) => ({
+    sampleId: `${trackId}:${index}`,
+    index,
+    trackId,
+    ptsUs: packet.ptsUs,
+    dtsUs: packet.dtsUs,
+    durationUs: packet.durationUs,
+    offset: 0,
+    size: packet.data.byteLength,
+    isKey: packet.isKey,
+    data: packet.data,
+    metadata: {
+      bitstreamFormat: 'avcc',
+      dataOrigin: 'encoded_mux',
+    },
+  }));
 }
 
 export function remuxMediaAssetToMp4(

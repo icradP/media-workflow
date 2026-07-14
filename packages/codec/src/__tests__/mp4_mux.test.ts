@@ -7,10 +7,12 @@ import {
   analyzeMediaSource,
   isMp4OrFmp4Signature,
   materializeMediaSelection,
+  muxEncodedTracksToMp4,
   parseMp4Metadata,
   remuxMediaAssetToMp4,
   remuxMediaSelectionsToMp4,
   selectTrack,
+  sampleToEncodedPacket,
 } from '@media-workflow/codec';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -145,5 +147,71 @@ describe('MP4 muxer', () => {
     expect(result.audioSampleCount).toBeGreaterThan(0);
     expect(isMp4OrFmp4Signature(result.data)).toBe(true);
     expect(parseMp4Metadata(result.data)?.audioTrackCount).toBeGreaterThan(0);
+  });
+
+  it('muxes pre-encoded elementary tracks (Live finalize path)', () => {
+    const asset = loadAsset('tests/generated-av.mp4');
+    const videoSel = materializeMediaSelection(
+      selectTrack(asset, { kind: 'video', index: 0 }),
+      { limit: 8, order: 'presentation' },
+    );
+    const audioSel = materializeMediaSelection(
+      selectTrack(asset, { kind: 'audio', index: 0 }),
+      { startTimeUs: 0, endTimeUs: 400_000, order: 'presentation' },
+    );
+    const videoTrack = videoSel.selectedTrack.track;
+    const audioTrack = audioSel.selectedTrack.track;
+    expect(videoTrack.kind).toBe('video');
+    expect(audioTrack.kind).toBe('audio');
+    expect(videoTrack.codecConfig).toBeTruthy();
+    expect(audioTrack.codecConfig).toBeTruthy();
+
+    const videoPackets = videoSel.samples.map(sample => {
+      const packet = sampleToEncodedPacket(sample, videoTrack, 'mp4');
+      expect(packet).toBeTruthy();
+      return {
+        data: packet!.data,
+        ptsUs: packet!.ptsUs,
+        dtsUs: packet!.dtsUs,
+        durationUs: packet!.durationUs ?? 33_333,
+        isKey: packet!.isKey,
+      };
+    });
+    const audioPackets = audioSel.samples.map(sample => {
+      const packet = sampleToEncodedPacket(sample, audioTrack, 'mp4');
+      expect(packet).toBeTruthy();
+      return {
+        data: packet!.data,
+        ptsUs: packet!.ptsUs,
+        dtsUs: packet!.dtsUs,
+        durationUs: packet!.durationUs ?? 21_333,
+        isKey: packet!.isKey,
+      };
+    });
+
+    const result = muxEncodedTracksToMp4([
+      {
+        kind: 'video',
+        codec: videoTrack.codec,
+        codecFamily: 'h264',
+        codecConfig: videoTrack.codecConfig!,
+        width: videoTrack.kind === 'video' ? videoTrack.width : 640,
+        height: videoTrack.kind === 'video' ? videoTrack.height : 480,
+        packets: videoPackets,
+      },
+      {
+        kind: 'audio',
+        codec: audioTrack.codec,
+        codecFamily: 'aac',
+        codecConfig: audioTrack.codecConfig!,
+        sampleRate: audioTrack.kind === 'audio' ? audioTrack.sampleRate : 48_000,
+        channels: audioTrack.kind === 'audio' ? audioTrack.channels : 2,
+        packets: audioPackets,
+      },
+    ]);
+
+    expect(isMp4OrFmp4Signature(result.data)).toBe(true);
+    expect(result.videoSampleCount).toBe(8);
+    expect(result.audioSampleCount).toBeGreaterThan(0);
   });
 });

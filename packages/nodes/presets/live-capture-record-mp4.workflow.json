@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "name": "Live Capture Record MP4",
+  "description": "Live Play monitors camera/mic; Trigger pulses open Muxer recordStart/recordStop gates → Player/Export.",
+  "nodes": [
+    {
+      "id": "capture",
+      "type": "device_capture",
+      "position": [40, 160],
+      "params": {
+        "durationSeconds": 5,
+        "enableVideo": true,
+        "enableMicrophone": true,
+        "enableSpeaker": false,
+        "width": 640,
+        "height": 480,
+        "frameRate": 30,
+        "sampleRate": 48000,
+        "videoDeviceId": "",
+        "audioDeviceId": ""
+      }
+    },
+    {
+      "id": "ring",
+      "type": "ring_buffer_source",
+      "position": [320, 60],
+      "params": {
+        "fillMode": "continuous",
+        "ioMode": "producer_push",
+        "clockMode": "realtime",
+        "rate": 1,
+        "targetSampleRate": 0,
+        "targetFrameRate": 30,
+        "capacitySeconds": 1,
+        "underrunPolicy": "silence",
+        "overrunPolicy": "drop_oldest",
+        "loop": false,
+        "gain": 1
+      }
+    },
+    {
+      "id": "preview",
+      "type": "video_preview",
+      "position": [620, 20],
+      "params": {
+        "frameIndex": 0,
+        "continuous": true
+      }
+    },
+    {
+      "id": "gain",
+      "type": "audio_gain",
+      "position": [620, 220],
+      "params": { "gain": 0.7 }
+    },
+    {
+      "id": "filter",
+      "type": "audio_biquadfilter",
+      "position": [880, 220],
+      "params": {
+        "type": "lowpass",
+        "frequency": 12000,
+        "Q": 1,
+        "detune": 0
+      }
+    },
+    {
+      "id": "destination",
+      "type": "audio_destination",
+      "position": [1140, 220]
+    },
+    {
+      "id": "start-btn",
+      "type": "trigger_button",
+      "position": [320, 360],
+      "params": { "label": "● Start" }
+    },
+    {
+      "id": "stop-btn",
+      "type": "trigger_button",
+      "position": [320, 460],
+      "params": { "label": "■ Stop" }
+    },
+    {
+      "id": "mux",
+      "type": "mp4_muxer",
+      "position": [620, 400],
+      "params": {
+        "fileName": "live-capture.mp4",
+        "alignMode": "trim_to_video",
+        "videoBitrate": 2000000,
+        "audioBitrate": 128000
+      }
+    },
+    {
+      "id": "play",
+      "type": "mp4_player",
+      "position": [920, 360],
+      "params": { "autoplay": true }
+    },
+    {
+      "id": "export",
+      "type": "file_export",
+      "position": [920, 500],
+      "params": { "fileName": "live-capture.mp4" }
+    }
+  ],
+  "edges": [
+    {
+      "id": "capture-ring-audio",
+      "sourceNodeId": "capture",
+      "sourceOutput": "out",
+      "targetNodeId": "ring",
+      "targetInput": "audioIn"
+    },
+    {
+      "id": "capture-ring-stream",
+      "sourceNodeId": "capture",
+      "sourceOutput": "stream",
+      "targetNodeId": "ring",
+      "targetInput": "liveIn"
+    },
+    {
+      "id": "ring-preview",
+      "sourceNodeId": "ring",
+      "sourceOutput": "stream",
+      "targetNodeId": "preview",
+      "targetInput": "stream"
+    },
+    {
+      "id": "ring-gain",
+      "sourceNodeId": "ring",
+      "sourceOutput": "out",
+      "targetNodeId": "gain",
+      "targetInput": "in"
+    },
+    {
+      "id": "gain-filter",
+      "sourceNodeId": "gain",
+      "sourceOutput": "out",
+      "targetNodeId": "filter",
+      "targetInput": "in"
+    },
+    {
+      "id": "filter-dest",
+      "sourceNodeId": "filter",
+      "sourceOutput": "out",
+      "targetNodeId": "destination",
+      "targetInput": "in"
+    },
+    {
+      "id": "capture-mux-video",
+      "sourceNodeId": "capture",
+      "sourceOutput": "stream",
+      "targetNodeId": "mux",
+      "targetInput": "videoStream"
+    },
+    {
+      "id": "capture-mux-audio-stream",
+      "sourceNodeId": "capture",
+      "sourceOutput": "stream",
+      "targetNodeId": "mux",
+      "targetInput": "audioStream"
+    },
+    {
+      "id": "filter-mux-audio",
+      "sourceNodeId": "filter",
+      "sourceOutput": "out",
+      "targetNodeId": "mux",
+      "targetInput": "audioIn"
+    },
+    {
+      "id": "start-mux",
+      "sourceNodeId": "start-btn",
+      "sourceOutput": "out",
+      "targetNodeId": "mux",
+      "targetInput": "recordStart"
+    },
+    {
+      "id": "stop-mux",
+      "sourceNodeId": "stop-btn",
+      "sourceOutput": "out",
+      "targetNodeId": "mux",
+      "targetInput": "recordStop"
+    },
+    {
+      "id": "mux-play",
+      "sourceNodeId": "mux",
+      "sourceOutput": "file",
+      "targetNodeId": "play",
+      "targetInput": "source"
+    },
+    {
+      "id": "mux-export",
+      "sourceNodeId": "mux",
+      "sourceOutput": "file",
+      "targetNodeId": "export",
+      "targetInput": "file"
+    }
+  ]
+}

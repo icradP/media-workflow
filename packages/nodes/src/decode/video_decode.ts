@@ -1,5 +1,7 @@
 import type {
+  DecodedVideoClip,
   DecodedVideoPixelFormat,
+  EncodedTrack,
   MediaAsset,
   MediaSelection,
   NodeDefinition,
@@ -10,6 +12,7 @@ import {
   WEBCODECS_H264_BACKEND,
 } from '@media-workflow/core/decoder';
 import {
+  buildEncodedTrackFromSelection,
   materializeMediaSelection,
   planVideoDecodeRequest,
   selectTrack,
@@ -22,18 +25,21 @@ const OUTPUT_FORMATS = WEBCODECS_H264_BACKEND.outputFormats.filter(
 
 export const videoDecodeNode: NodeDefinition<
   { source: 'decode_source' },
-  { video: 'decoded_video'; selection: 'media_selection' }
+  { video: 'decoded_video'; selection: 'media_selection'; track: 'encoded_track' }
 > = {
   id: 'video_decode',
   category: 'decode',
   displayName: 'Video Decode',
-  description: 'Decode a prepared selection or select and decode directly from an asset.',
+  description:
+    'Select video samples and emit EncodedTrack for Ring stream-decode. '
+    + 'Optionally eager-decode frames for scrub/inspect.',
   inputs: {
     source: { type: 'decode_source', label: 'Asset or Media Selection' },
   },
   outputs: {
     video: { type: 'decoded_video', label: 'Decoded Video' },
     selection: { type: 'media_selection', label: 'Media Selection' },
+    track: { type: 'encoded_track', label: 'Encoded Track' },
   },
   params: {
     trackId: { name: 'trackId', type: 'string', default: '' },
@@ -61,6 +67,11 @@ export const videoDecodeNode: NodeDefinition<
       values: ['all', 'key', 'non_key', 'I', 'P', 'B', 'IDR'],
     },
     limit: { name: 'limit', type: 'number', default: 1, min: -1, step: 1 },
+    eagerDecode: {
+      name: 'eagerDecode',
+      type: 'boolean',
+      default: false,
+    },
     outputFormat: {
       name: 'outputFormat',
       type: 'enum',
@@ -98,6 +109,20 @@ export const videoDecodeNode: NodeDefinition<
       throw new Error(`VideoDecode: track ${track.trackId} has no decoder configuration`);
     }
 
+    const encodedTrack = buildEncodedTrackFromSelection(selection);
+    const eagerDecode = params.eagerDecode !== false;
+
+    if (!eagerDecode) {
+      ctx.log.info(
+        `VideoDecode: EncodedTrack ${encodedTrack.packets.length} packet(s) · eagerDecode=false (Live stream-decode)`,
+      );
+      return {
+        video: emptyDecodedClip(selection.selectionId),
+        selection,
+        track: encodedTrack,
+      };
+    }
+
     const request = planVideoDecodeRequest({
       requestId: `${selection.selectionId}:video`,
       track: track as VideoMediaTrack,
@@ -116,9 +141,24 @@ export const videoDecodeNode: NodeDefinition<
     return {
       video: { ...result.frames, selectionId: selection.selectionId },
       selection,
+      track: encodedTrack,
     };
   },
 };
+
+function emptyDecodedClip(selectionId: string): DecodedVideoClip {
+  return {
+    requestId: `${selectionId}:deferred`,
+    selectionId,
+    backend: WEBCODECS_H264_BACKEND,
+    frames: [],
+    diagnostics: [{
+      severity: 'info',
+      code: 'video_decode.eager_decode_skipped',
+      message: 'Eager decode skipped; use EncodedTrack → Ring Buffer for Live stream-decode.',
+    }],
+  };
+}
 
 function isMediaSelection(value: MediaAsset | MediaSelection): value is MediaSelection {
   return 'selectionId' in value && 'selectedTrack' in value;

@@ -20,3 +20,4 @@ export * from './planner/index.js';
 export * from './decode/index.js';
 export * from './encode/index.js';
 export * from './capture/index.js';
+export * from './video/index.js';

@@ -1,8 +1,11 @@
 import type {
+  ControlHandle,
+  LiveStreamHandle,
   MediaAsset,
   MediaFile,
   MediaSelection,
   NodeDefinition,
+  WebAudioHandle,
 } from '@media-workflow/core';
 import { remuxMediaAssetToMp4, remuxMediaSelectionsToMp4 } from '@media-workflow/codec';
 
@@ -11,17 +14,29 @@ export const mp4MuxerNode: NodeDefinition<
     video: 'media_selection';
     audio: 'media_selection';
     asset: 'media_asset';
+    videoStream: 'live_stream';
+    audioStream: 'live_stream';
+    audioIn: 'webaudio';
+    recordStart: 'control';
+    recordStop: 'control';
   },
   { file: 'media_file' }
 > = {
   id: 'mp4_muxer',
   category: 'transform',
   displayName: 'MP4 Muxer',
-  description: 'Remux H.264/AAC into MP4. G.711/MP3: use Audio Decode → AAC Encoder first.',
+  description:
+    'Batch: remux H.264/AAC selections into MP4. '
+    + 'Live: streams + optional webaudio; recordStart / recordStop 任意脉冲即开录/停录（门控）。',
   inputs: {
     video: { type: 'media_selection', label: 'Video Selection', optional: true },
     audio: { type: 'media_selection', label: 'Audio Selection', optional: true },
     asset: { type: 'media_asset', label: 'Media Asset (fallback)', optional: true },
+    videoStream: { type: 'live_stream', label: 'Live Video Stream', optional: true },
+    audioStream: { type: 'live_stream', label: 'Live Audio Stream', optional: true },
+    audioIn: { type: 'webaudio', label: 'Live Audio (processed)', optional: true },
+    recordStart: { type: 'control', label: 'Record Start', optional: true },
+    recordStop: { type: 'control', label: 'Record Stop', optional: true },
   },
   outputs: {
     file: { type: 'media_file', label: 'MP4 File' },
@@ -52,14 +67,39 @@ export const mp4MuxerNode: NodeDefinition<
       default: 'trim_to_video',
       values: ['none', 'trim_to_video', 'trim_to_audio'],
     },
+    videoBitrate: {
+      name: 'videoBitrate',
+      type: 'number',
+      default: 2_000_000,
+      min: 250_000,
+      step: 50_000,
+    },
+    audioBitrate: {
+      name: 'audioBitrate',
+      type: 'number',
+      default: 128_000,
+      min: 32_000,
+      step: 8_000,
+    },
   },
   async execute(ctx, { inputs, params }) {
     const video = inputs.video as MediaSelection | undefined;
     const audio = inputs.audio as MediaSelection | undefined;
     const asset = inputs.asset as MediaAsset | undefined;
+    const videoStream = inputs.videoStream as LiveStreamHandle | undefined;
+    const audioStream = inputs.audioStream as LiveStreamHandle | undefined;
+    const audioIn = inputs.audioIn as WebAudioHandle | undefined;
+    const recordStart = inputs.recordStart as ControlHandle | undefined;
+    const recordStop = inputs.recordStop as ControlHandle | undefined;
 
     if (!video && !audio && !asset) {
-      throw new Error('Mp4Muxer: connect video/audio selections or a media asset');
+      if (videoStream || audioStream || audioIn || recordStart || recordStop) {
+        throw new Error(
+          'Mp4Muxer: Live streams + recordStart/Stop are session-driven — '
+          + 'use Live Play + Trigger pulses (batch「运行」needs media_selection/asset).',
+        );
+      }
+      throw new Error('Mp4Muxer: connect video/audio selections, a media asset, or Live streams + triggers');
     }
 
     const endTimeSeconds = optionalSeconds(params.endTimeSeconds);

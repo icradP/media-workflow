@@ -27,17 +27,33 @@ import {
 import {
   nodesByCategory,
   allNodes,
+  nodeRegistry,
   WORKFLOW_PRESET_CATALOG,
   DEFAULT_WORKFLOW_PRESET_ID,
   type WorkflowPreset,
 } from '@media-workflow/nodes';
+import {
+  createLiveAudioSession,
+  drawAudioSpectrumPreview,
+  type LiveAudioSession,
+} from './live_audio_session.js';
+import { formatTrackDurationSummary } from './link_flow.js';
 import {
   BYTE_PRODUCING_PIN_TYPES,
   createMemoryCache,
   executeGraph,
   analyzeRunnableWorkflow,
 } from '@media-workflow/core';
-import type { ExecutionCache, NodeExecutionEvent } from '@media-workflow/core';
+import type {
+  EncodedPacket,
+  EncodedTrack,
+  ExecutionCache,
+  NodeExecutionEvent,
+  PcmAudioClip,
+  DecodedVideoClip,
+  DecodedVideoFrame,
+} from '@media-workflow/core';
+import { drawDecodedFrameToCanvas, parseMp4Metadata } from '@media-workflow/codec';
 import {
   exportWorkflowPresetFromLGraph,
   extractWorkflowFromLGraph,
@@ -56,7 +72,9 @@ import {
   deviceCaptureNodeHeight,
   deviceCaptureNodeWidth,
 } from './device_capture_ui.js';
+import { attachTriggerButtonUi } from './trigger_button_ui.js';
 import { clearViewport, renderExecutionEvent } from './viewport.js';
+import type { MediaFile } from '@media-workflow/core';
 
 // ─── Pin type → LiteGraph color ───
 
@@ -80,6 +98,10 @@ const PIN_COLORS: Record<string, string> = {
   decoded_video_frames: '#48dbfb',
   decoded_video: '#48dbfb',
   pcm_audio: '#5f27cd',
+  webaudio: '#00d2d3',
+  live_stream: '#00cec9',
+  control: '#fd79a8',
+  audio_spectrum: '#54a0ff',
   encoded_track: '#ff9f43',
   media_file: '#10ac84',
   media: '#ff6b6b',
@@ -124,6 +146,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   inspect: '#feca57',
   transform: '#10ac84',
   export: '#1dd1a1',
+  realtime: '#00d2d3',
   utility: '#f368e0',
   parser: '#7c5cff',
   demux: '#ff9f43',
@@ -144,7 +167,10 @@ interface LGraphNodeBase {
   fileWidget?: LGraphWidget;
   displayPreview?: string[];
   displayCanvas?: HTMLCanvasElement;
+  spectrumBins?: Uint8Array | null;
+  spectrumMeta?: { sampleRate: number; fftSize: number; mark: number };
   properties: Record<string, unknown>;
+  setDirtyCanvas?: (fg: boolean, bg: boolean) => void;
   onExecute?: () => void;
   onDrawForeground?: (context: CanvasRenderingContext2D) => void;
   pos: [number, number];
@@ -179,6 +205,7 @@ interface LGraphWidget {
 
 interface RegisterNodeTypeOptions {
   onRequestFile?: (node: LGraphNodeBase) => void;
+  onTriggerPulse?: (nodeId: string) => void | Promise<void>;
 }
 
 function configureLiteGraphLayout(): void {
@@ -199,6 +226,11 @@ function applyComputedNodeSize(
 
   if (TIMELINE_NODE_IDS.has(nodeDef.id)) {
     node.size = [frameSelectorNodeWidth(), frameSelectorNodeHeight()];
+    return;
+  }
+
+  if (nodeDef.id === 'audio_visualization') {
+    node.size = [Math.max(width, 300), Math.max(height, 200)];
     return;
   }
 
@@ -269,15 +301,36 @@ export function registerNodeTypes(
       if (nodeDef.id === 'device_capture') {
         attachDeviceCaptureUi(this as never, onParamChange);
       }
+      if (nodeDef.id === 'trigger_button') {
+        attachTriggerButtonUi(
+          this as never,
+          nodeId => options.onTriggerPulse?.(nodeId),
+          onParamChange,
+        );
+      }
       initNodeParamDefaults(this as never, nodeDef);
       attachNodeParamWidgets(this as never, nodeDef, onParamChange);
       if (
         nodeDef.category === 'display' ||
         nodeDef.category === 'inspect' ||
         nodeDef.id === 'file_export'
+        || nodeDef.id === 'mp4_muxer'
       ) {
-        this.displayPreview = ['等待分析结果…'];
+        this.displayPreview = nodeDef.id === 'mp4_muxer'
+          ? ['Batch remux 或 Live Signal Record']
+          : ['等待分析结果…'];
         attachExecutionHighlight(this, context => drawDisplayPreview(this, context));
+      } else if (nodeDef.id === 'audio_visualization') {
+        this.displayPreview = ['Live Play to show spectrum'];
+        attachExecutionHighlight(this, context => {
+          const panelY = 26;
+          const height = Math.max(80, this.size[1] - panelY - 10);
+          context.save();
+          context.translate(0, panelY);
+          const sized = { ...this, size: [this.size[0], height] as [number, number] };
+          drawAudioSpectrumPreview(sized, context);
+          context.restore();
+        });
       } else {
         attachExecutionHighlight(this);
       }
@@ -414,16 +467,25 @@ function summarizeDisplayEvent(event: NodeExecutionEvent): string[] {
   }
 
   if (event.node.id === 'video_preview') {
-    const frame = selectedPreviewFrame(event) as {
-      displayWidth?: number;
-      displayHeight?: number;
-      format?: string;
-      sourceSampleId?: string;
-    } | undefined;
-    return [
-      `${frame?.displayWidth ?? '?'}×${frame?.displayHeight ?? '?'} · ${String(frame?.format ?? 'frame')}`,
-      String(frame?.sourceSampleId ?? 'decoded frame'),
-    ];
+    const frame = selectedPreviewFrame(event);
+    if (frame) {
+      return [
+        `${frame.displayWidth}×${frame.displayHeight} · ${frame.format}`,
+        String(frame.sourceSampleId),
+      ];
+    }
+    try {
+      const payload = JSON.parse(String(event.outputs.preview ?? '{}')) as {
+        mode?: string;
+        liveStreamId?: string;
+      };
+      return [
+        payload.mode === 'live-only' ? 'Live WebGPU preview' : 'Video Preview',
+        String(payload.liveStreamId ?? 'connect live_stream'),
+      ];
+    } catch {
+      return ['Video Preview', 'decoded_video / live_stream'];
+    }
   }
 
   if (event.node.id === 'wav_player') {
@@ -468,81 +530,12 @@ function summarizeDisplayEvent(event: NodeExecutionEvent): string[] {
   ];
 }
 
-function createYuvDisplayCanvas(event: NodeExecutionEvent): HTMLCanvasElement | undefined {
-  const frame = selectedPreviewFrame(event) as {
-    displayWidth?: number;
-    displayHeight?: number;
-    planes?: Uint8Array[];
-    strides?: number[];
-  } | undefined;
-
-  if (!frame?.planes || !frame.displayWidth || !frame.displayHeight) return undefined;
-
-  const previewCanvas = document.createElement('canvas');
-  previewCanvas.width = frame.displayWidth;
-  previewCanvas.height = frame.displayHeight;
-  renderI420FrameToCanvas(
-    previewCanvas,
-    frame.planes,
-    frame.displayWidth,
-    frame.displayHeight,
-    frame.strides ?? [
-      frame.displayWidth,
-      Math.ceil(frame.displayWidth / 2),
-      Math.ceil(frame.displayWidth / 2),
-    ],
-  );
-  return previewCanvas;
-}
-
-function selectedPreviewFrame(event: NodeExecutionEvent): unknown {
-  const video = event.inputs.video as { frames?: unknown[] } | undefined;
+function selectedPreviewFrame(event: NodeExecutionEvent): DecodedVideoFrame | undefined {
+  const video = event.inputs.video as DecodedVideoClip | undefined;
   const frames = video?.frames ?? [];
   if (frames.length === 0) return undefined;
   const requested = Math.max(0, Math.floor(Number(event.params.frameIndex) || 0));
   return frames[Math.min(frames.length - 1, requested)];
-}
-
-function renderI420FrameToCanvas(
-  target: HTMLCanvasElement,
-  planes: Uint8Array[],
-  width: number,
-  height: number,
-  strides: number[],
-): void {
-  const context = target.getContext('2d');
-  if (!context) return;
-  const [yPlane, uPlane, vPlane] = planes;
-  if (!yPlane || !uPlane || !vPlane) return;
-
-  const yStride = strides[0] ?? width;
-  const uvWidth = Math.ceil(width / 2);
-  const uStride = strides[1] ?? uvWidth;
-  const vStride = strides[2] ?? uvWidth;
-  const image = context.createImageData(width, height);
-  const rgba = image.data;
-
-  for (let row = 0; row < height; row++) {
-    for (let col = 0; col < width; col++) {
-      const y = yPlane[row * yStride + col]!;
-      const u = uPlane[Math.floor(row / 2) * uStride + Math.floor(col / 2)]!;
-      const v = vPlane[Math.floor(row / 2) * vStride + Math.floor(col / 2)]!;
-      const c = y - 16;
-      const d = u - 128;
-      const e = v - 128;
-      const index = (row * width + col) * 4;
-      rgba[index] = clampByte((298 * c + 409 * e + 128) >> 8);
-      rgba[index + 1] = clampByte((298 * c - 100 * d - 208 * e + 128) >> 8);
-      rgba[index + 2] = clampByte((298 * c + 516 * d + 128) >> 8);
-      rgba[index + 3] = 255;
-    }
-  }
-
-  context.putImageData(image, 0, 0);
-}
-
-function clampByte(value: number): number {
-  return Math.max(0, Math.min(255, value));
 }
 
 export interface MediaWorkflowApp {
@@ -554,9 +547,15 @@ export function createApp(): MediaWorkflowApp {
   let canvas: LGraphCanvas;
   let execCache: ExecutionCache;
   const filesByNode = new Map<string, File>();
+  const pcmByNode = new Map<string, PcmAudioClip>();
+  const packetsByNode = new Map<string, EncodedPacket[]>();
+  const decodedVideoByNode = new Map<string, DecodedVideoClip>();
+  const encodedTrackByNode = new Map<string, EncodedTrack>();
+  const mediaFileByNode = new Map<string, MediaFile>();
   let fileInput: HTMLInputElement;
   let pendingFileNode: LGraphNodeBase | null = null;
   let isRunning = false;
+  let liveSession: LiveAudioSession | null = null;
 
   async function mount() {
     graph = new LGraph();
@@ -573,11 +572,31 @@ export function createApp(): MediaWorkflowApp {
     bindGraphCanvas(canvas);
 
     registerNodeTypes(
-      { onRequestFile: openFilePickerForNode },
-      nodeId => execCache.invalidate(nodeId),
+      {
+        onRequestFile: openFilePickerForNode,
+        onTriggerPulse: async nodeId => {
+          try {
+            if (!liveSession?.active) {
+              setStatus('先点击 Live Play，再按 Trigger', 'error');
+              return;
+            }
+            await liveSession.emitPulse(nodeId);
+            canvas.setDirty(true, true);
+          } catch (error) {
+            setStatus(`Trigger · ${String(error)}`, 'error');
+          }
+        },
+      },
+      nodeId => {
+        execCache.invalidate(nodeId);
+        syncLiveParams(nodeId);
+      },
     );
     installInlineNodeWidgetEditor(canvas, canvasWrap, {
-      onValueChange: nodeId => execCache.invalidate(nodeId),
+      onValueChange: nodeId => {
+        execCache.invalidate(nodeId);
+        syncLiveParams(nodeId);
+      },
     });
     installCanvasNodeMenu(canvas, {
       categories: nodesByCategory(),
@@ -600,6 +619,7 @@ export function createApp(): MediaWorkflowApp {
       getCanvas: () => canvas,
       onParamChange: nodeId => {
         execCache.invalidate(nodeId);
+        syncLiveParams(nodeId);
         canvas.setDirty(true, true);
       },
     });
@@ -659,7 +679,13 @@ export function createApp(): MediaWorkflowApp {
     }
 
     filesByNode.clear();
+    pcmByNode.clear();
+    packetsByNode.clear();
+    decodedVideoByNode.clear();
+    encodedTrackByNode.clear();
+    mediaFileByNode.clear();
     execCache.clear();
+    stopLivePlayback();
     clearNodeExecutionStates(graph);
     clearNodeExecutionIgnored(graph);
     clearViewport();
@@ -769,6 +795,220 @@ export function createApp(): MediaWorkflowApp {
     document.getElementById('run-workflow-button')?.addEventListener('click', () => {
       void runWorkflow();
     });
+    document.getElementById('live-play-button')?.addEventListener('click', () => {
+      void startLivePlayback();
+    });
+    document.getElementById('live-stop-button')?.addEventListener('click', () => {
+      stopLivePlayback();
+    });
+  }
+
+  function syncLiveParams(nodeId: string) {
+    if (!liveSession?.active) return;
+    const node = (graph as unknown as { getNodeById(id: number): LGraphNodeBase | null })
+      .getNodeById(Number(nodeId));
+    if (!node?.properties) return;
+    for (const [name, value] of Object.entries(node.properties)) {
+      liveSession.updateParam(nodeId, name, value);
+    }
+  }
+
+  function ensureLiveSession(): LiveAudioSession {
+    if (!liveSession) {
+      liveSession = createLiveAudioSession({
+        graph,
+        getFileForNode: nodeId => filesByNode.get(nodeId),
+        getPcmForNode: nodeId => pcmByNode.get(nodeId),
+        getPacketsForNode: nodeId => packetsByNode.get(nodeId),
+        getDecodedVideoForNode: nodeId => decodedVideoByNode.get(nodeId),
+        getEncodedTrackForNode: nodeId => encodedTrackByNode.get(nodeId),
+        onStatus: (message, state) => setStatus(message, state ?? 'idle'),
+        // Links are drawn on the bg canvas; dirt both so flow dots animate without dragging.
+        onFrame: () => canvas.setDirty(true, true),
+        onMediaFile: (nodeId, file) => {
+          feedLiveRecordedMediaFile(nodeId, file);
+        },
+      });
+    }
+    return liveSession;
+  }
+
+  function feedLiveRecordedMediaFile(muxerNodeId: string, file: MediaFile): void {
+    mediaFileByNode.set(muxerNodeId, file);
+    const muxer = graph.getNodeById(Number(muxerNodeId)) as LGraphNodeBase | null;
+    if (muxer) {
+      const durationUs = Number(file.metadata.durationUs) || 0;
+      muxer.displayPreview = [
+        `Live recorded ${file.fileName}`,
+        `${(durationUs / 1_000_000).toFixed(1)} s · ${file.data.byteLength} bytes`,
+      ];
+      muxer.setDirtyCanvas?.(true, true);
+    }
+
+    const metadata = parseMp4Metadata(file.data);
+    const durationMs = metadata?.durationMs
+      ?? (Number(file.metadata.durationUs) || 0) / 1_000;
+
+    const downstream = findMuxFileDownstream(muxerNodeId);
+    if (downstream.length === 0) {
+      renderLiveRecordedMp4(muxerNodeId, file);
+      return;
+    }
+
+    for (const target of downstream) {
+      mediaFileByNode.set(target.nodeId, file);
+      if (target.defId === 'mp4_player') {
+        const playerDef = nodeRegistry.get('mp4_player');
+        if (!playerDef) continue;
+        const event: NodeExecutionEvent = {
+          nodeId: target.nodeId,
+          node: playerDef,
+          status: 'completed',
+          inputs: { source: file },
+          params: { autoplay: true },
+          outputs: {
+            preview: JSON.stringify({
+              fileName: file.fileName,
+              mimeType: file.mimeType,
+              byteLength: file.data.byteLength,
+              durationMs,
+              trackCount: metadata?.trackCount ?? 2,
+              videoTrackCount: metadata?.videoTrackCount
+                ?? (Number(file.metadata.videoSampleCount) > 0 ? 1 : 0),
+              audioTrackCount: metadata?.audioTrackCount
+                ?? (Number(file.metadata.audioSampleCount) > 0 ? 1 : 0),
+              autoplay: true,
+            }),
+          },
+          durationMs: 0,
+          cacheHit: false,
+          diagnostics: [],
+        };
+        renderExecutionEvent(event);
+        const node = graph.getNodeById(Number(target.nodeId)) as LGraphNodeBase | null;
+        if (node) {
+          node.displayPreview = [
+            `Live → ${file.fileName}`,
+            `${(durationMs / 1_000).toFixed(1)} s · ${file.data.byteLength} bytes`,
+          ];
+          node.setDirtyCanvas?.(true, true);
+        }
+      } else if (target.defId === 'file_export') {
+        const exportDef = nodeRegistry.get('file_export');
+        if (!exportDef) continue;
+        const event: NodeExecutionEvent = {
+          nodeId: target.nodeId,
+          node: exportDef,
+          status: 'completed',
+          inputs: { file },
+          params: {},
+          outputs: {
+            download: JSON.stringify({
+              fileName: file.fileName,
+              mimeType: file.mimeType,
+              extension: file.extension,
+              byteLength: file.data.byteLength,
+              metadata: file.metadata,
+            }),
+          },
+          durationMs: 0,
+          cacheHit: false,
+          diagnostics: [],
+        };
+        renderExecutionEvent(event);
+        const node = graph.getNodeById(Number(target.nodeId)) as LGraphNodeBase | null;
+        if (node) {
+          node.displayPreview = [`Ready: ${file.fileName}`, `${file.data.byteLength} bytes`];
+          node.setDirtyCanvas?.(true, true);
+        }
+      }
+    }
+  }
+
+  function findMuxFileDownstream(muxerNodeId: string): Array<{ nodeId: string; defId: string }> {
+    const muxer = graph.getNodeById(Number(muxerNodeId)) as LGraphNodeBase | null;
+    if (!muxer?.outputs) return [];
+    const fileSlot = muxer.outputs.findIndex(output => output.name === 'file');
+    if (fileSlot < 0) return [];
+    const graphInternal = graph as unknown as {
+      links: Record<string, { target_id: number; target_slot: number }>;
+      getNodeById: (id: number) => { type: string } | null;
+    };
+    const results: Array<{ nodeId: string; defId: string }> = [];
+    for (const linkId of muxer.outputs[fileSlot]?.links ?? []) {
+      const link = graphInternal.links[String(linkId)];
+      if (!link) continue;
+      const target = graphInternal.getNodeById(link.target_id);
+      if (!target) continue;
+      results.push({
+        nodeId: String(link.target_id),
+        defId: target.type.replace(/^media\//, ''),
+      });
+    }
+    return results;
+  }
+
+  function renderLiveRecordedMp4(nodeId: string, file: MediaFile): void {
+    const viewport = document.getElementById('viewport');
+    if (!viewport) return;
+    const blob = new Blob([file.data.slice()], { type: file.mimeType || 'video/mp4' });
+    const url = URL.createObjectURL(blob);
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.dataset.nodeId = nodeId;
+    const durationUs = Number(file.metadata.durationUs) || 0;
+    const safeName = file.fileName.replace(/[<>&"']/g, '');
+    card.innerHTML = `
+      <div class="result-card__head">
+        <strong>Live Record MP4</strong>
+        <span class="result-card__state">Ready</span>
+      </div>
+      <div class="result-card__body">
+        <h4 class="viewport-title">${safeName}</h4>
+        <dl class="viewport-dl">
+          <div><dt>Duration</dt><dd>${(durationUs / 1_000_000).toFixed(2)} s</dd></div>
+          <div><dt>Bytes</dt><dd>${file.data.byteLength}</dd></div>
+          <div><dt>Video samples</dt><dd>${Number(file.metadata.videoSampleCount) || 0}</dd></div>
+          <div><dt>Audio samples</dt><dd>${Number(file.metadata.audioSampleCount) || 0}</dd></div>
+        </dl>
+        <video class="viewport-video" controls src="${url}"></video>
+        <p><a class="viewport-link" href="${url}" download="${safeName}">Download ${safeName}</a></p>
+      </div>
+    `;
+    viewport.prepend(card);
+  }
+
+  async function startLivePlayback() {
+    if (isRunning) {
+      setStatus('请先等待 batch 运行结束', 'error');
+      return;
+    }
+    try {
+      setLiveButtonsState(true);
+      startExecutionAnimation(canvas);
+      await ensureLiveSession().start();
+      canvas.setDirty(true, true);
+    } catch (error) {
+      stopLivePlayback();
+      setStatus(`Live 失败 · ${String(error)}`, 'error');
+      setLiveButtonsState(false);
+    }
+  }
+
+  function stopLivePlayback() {
+    liveSession?.stop();
+    if (!isRunning) stopExecutionAnimation();
+    setLiveButtonsState(false);
+    canvas.setDirty(true, true);
+  }
+
+  function setLiveButtonsState(playing: boolean) {
+    const play = document.getElementById('live-play-button') as HTMLButtonElement | null;
+    const stop = document.getElementById('live-stop-button') as HTMLButtonElement | null;
+    const run = document.getElementById('run-workflow-button') as HTMLButtonElement | null;
+    if (play) play.disabled = playing;
+    if (stop) stop.disabled = !playing;
+    if (run) run.disabled = playing || isRunning;
   }
 
   function setupThemeToggle() {
@@ -897,6 +1137,10 @@ export function createApp(): MediaWorkflowApp {
 
   async function runWorkflow() {
     if (isRunning) return;
+    if (liveSession?.active) {
+      setStatus('请先停止 Live 播放', 'error');
+      return;
+    }
 
     const prepared = prepareWorkflowExecution();
     if (!prepared) return;
@@ -930,9 +1174,14 @@ export function createApp(): MediaWorkflowApp {
         { runnableNodeIds },
       );
 
+      const trackSummaries = [...encodedTrackByNode.values()]
+        .map(track => formatTrackDurationSummary(track));
+      const trackPart = trackSummaries.length > 0
+        ? ` · EncodedTrack ${trackSummaries.join(', ')}`
+        : '';
       const successMessage = skipSummary
-        ? `执行完成 · ${results.size} 个节点 · ${skipSummary}`
-        : `执行完成 · ${results.size} 个节点 · ${workflow.edges.length} 条连线`;
+        ? `执行完成 · ${results.size} 个节点 · ${skipSummary}${trackPart}`
+        : `执行完成 · ${results.size} 个节点 · ${workflow.edges.length} 条连线${trackPart}`;
       setStatus(successMessage, 'success');
     } catch (err) {
       setStatus(`执行失败 · ${String(err)}`, 'error');
@@ -997,6 +1246,52 @@ export function createApp(): MediaWorkflowApp {
     return { workflow, nodeTypes, runnableNodeIds, skipSummary };
   }
 
+  function cachePcmOutputs(event: NodeExecutionEvent) {
+    for (const value of Object.values(event.outputs ?? {})) {
+      if (
+        value
+        && typeof value === 'object'
+        && 'planes' in value
+        && 'sampleRate' in value
+        && 'format' in value
+        && (value as PcmAudioClip).format === 'f32-planar'
+      ) {
+        pcmByNode.set(event.nodeId, value as PcmAudioClip);
+      }
+      if (Array.isArray(value) && value[0] && typeof value[0] === 'object' && 'ptsUs' in value[0]
+        && 'data' in value[0]) {
+        packetsByNode.set(event.nodeId, value as EncodedPacket[]);
+      }
+      if (
+        value
+        && typeof value === 'object'
+        && 'packets' in value
+        && Array.isArray((value as EncodedTrack).packets)
+        && 'decoderConfig' in value
+      ) {
+        const track = value as EncodedTrack;
+        encodedTrackByNode.set(event.nodeId, track);
+        packetsByNode.set(event.nodeId, track.packets);
+      } else if (
+        value
+        && typeof value === 'object'
+        && 'packets' in value
+        && Array.isArray((value as EncodedTrack).packets)
+      ) {
+        packetsByNode.set(event.nodeId, (value as EncodedTrack).packets);
+      }
+      if (
+        value
+        && typeof value === 'object'
+        && 'frames' in value
+        && Array.isArray((value as DecodedVideoClip).frames)
+        && 'backend' in value
+      ) {
+        decodedVideoByNode.set(event.nodeId, value as DecodedVideoClip);
+      }
+    }
+  }
+
   function handleExecutionEvent(
     event: NodeExecutionEvent,
     skipSummary: string | undefined,
@@ -1014,6 +1309,10 @@ export function createApp(): MediaWorkflowApp {
     }
 
     clearNodeExecutionRunning(graph, event.nodeId);
+
+    if (event.status === 'completed') {
+      cachePcmOutputs(event);
+    }
 
     if (event.status === 'failed') {
       const failedNode = markNodeExecutionFailed(
@@ -1059,7 +1358,13 @@ export function createApp(): MediaWorkflowApp {
     try {
       const preset = parseWorkflowPreset(await file.text());
       filesByNode.clear();
+      pcmByNode.clear();
+      packetsByNode.clear();
+      decodedVideoByNode.clear();
+      encodedTrackByNode.clear();
+      mediaFileByNode.clear();
       execCache.clear();
+      stopLivePlayback();
       clearNodeExecutionStates(graph);
       clearNodeExecutionIgnored(graph);
       clearViewport();
@@ -1122,9 +1427,22 @@ export function createApp(): MediaWorkflowApp {
     );
     if (!node) return;
     node.displayPreview = summarizeDisplayEvent(event);
-    node.displayCanvas = event.node.id === 'video_preview'
-      ? createYuvDisplayCanvas(event)
-      : undefined;
+    if (event.node.id === 'video_preview') {
+      const frame = selectedPreviewFrame(event);
+      if (frame) {
+        const previewCanvas = document.createElement('canvas');
+        previewCanvas.width = frame.displayWidth;
+        previewCanvas.height = frame.displayHeight;
+        node.displayCanvas = previewCanvas;
+        void drawDecodedFrameToCanvas(previewCanvas, frame).then(() => {
+          canvas.setDirty(true, true);
+        });
+      } else {
+        node.displayCanvas = undefined;
+      }
+    } else {
+      node.displayCanvas = undefined;
+    }
     canvas.setDirty(true, true);
   }
 

@@ -8,3 +8,4 @@ export {
 } from './config.js';
 export { buildAvcCFromNalus } from './avcc.js';
 export { normalizePacketPayload, sampleToEncodedPacket } from './normalize.js';
+export { buildEncodedTrackFromSelection } from './encoded_track.js';

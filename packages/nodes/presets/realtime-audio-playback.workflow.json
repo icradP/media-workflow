@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "name": "Realtime Audio Playback",
+  "description": "Shared pipeline: decode to PCM, process with Web Audio (Live listen), bake back to PCM for WAV. Run for export; Live for monitoring.",
+  "nodes": [
+    { "id": "file", "type": "file_loader", "position": [60, 200] },
+    { "id": "analyze", "type": "auto_analyze", "position": [300, 200] },
+    {
+      "id": "decode",
+      "type": "audio_decode",
+      "position": [540, 200],
+      "params": {
+        "trackIndex": 0,
+        "startTimeSeconds": 0,
+        "endTimeSeconds": 10
+      }
+    },
+    {
+      "id": "source",
+      "type": "ring_buffer_source",
+      "position": [800, 120],
+      "params": {
+        "fillMode": "static_once",
+        "ioMode": "consumer_pull",
+        "clockMode": "realtime",
+        "rate": 1,
+        "capacitySeconds": 10,
+        "underrunPolicy": "loop",
+        "overrunPolicy": "drop_oldest",
+        "gain": 0.5,
+        "loop": true
+      }
+    },
+    {
+      "id": "filter",
+      "type": "audio_biquadfilter",
+      "position": [1060, 120],
+      "params": {
+        "type": "lowpass",
+        "frequency": 12000,
+        "Q": 1,
+        "detune": 0
+      }
+    },
+    {
+      "id": "destination",
+      "type": "audio_destination",
+      "position": [1320, 40]
+    },
+    {
+      "id": "analyser",
+      "type": "audio_analyser",
+      "position": [1320, 200],
+      "params": {
+        "fftSize": "2048",
+        "minDecibels": -100,
+        "maxDecibels": -10,
+        "smoothingTimeConstant": 0.5
+      }
+    },
+    {
+      "id": "viz",
+      "type": "audio_visualization",
+      "position": [1580, 180],
+      "params": {
+        "continuous": true,
+        "mark": -1
+      }
+    },
+    {
+      "id": "to-pcm",
+      "type": "webaudio_to_pcm",
+      "position": [1320, 360],
+      "params": {
+        "maxDurationSeconds": 120
+      }
+    },
+    {
+      "id": "encode-wav",
+      "type": "wav_encoder",
+      "position": [1580, 360],
+      "params": { "fileName": "processed.wav", "sampleFormat": "pcm16" }
+    },
+    { "id": "play-wav", "type": "wav_player", "position": [1840, 320] },
+    { "id": "download", "type": "file_export", "position": [1840, 420] }
+  ],
+  "edges": [
+    {
+      "id": "file-analyze",
+      "sourceNodeId": "file",
+      "sourceOutput": "source",
+      "targetNodeId": "analyze",
+      "targetInput": "source"
+    },
+    {
+      "id": "analyze-decode",
+      "sourceNodeId": "analyze",
+      "sourceOutput": "asset",
+      "targetNodeId": "decode",
+      "targetInput": "source"
+    },
+    {
+      "id": "decode-source",
+      "sourceNodeId": "decode",
+      "sourceOutput": "audio",
+      "targetNodeId": "source",
+      "targetInput": "pcm"
+    },
+    {
+      "id": "decode-bake-pcm",
+      "sourceNodeId": "decode",
+      "sourceOutput": "audio",
+      "targetNodeId": "to-pcm",
+      "targetInput": "pcm"
+    },
+    {
+      "id": "source-filter",
+      "sourceNodeId": "source",
+      "sourceOutput": "out",
+      "targetNodeId": "filter",
+      "targetInput": "in"
+    },
+    {
+      "id": "filter-dest",
+      "sourceNodeId": "filter",
+      "sourceOutput": "out",
+      "targetNodeId": "destination",
+      "targetInput": "in"
+    },
+    {
+      "id": "filter-analyser",
+      "sourceNodeId": "filter",
+      "sourceOutput": "out",
+      "targetNodeId": "analyser",
+      "targetInput": "in"
+    },
+    {
+      "id": "analyser-viz",
+      "sourceNodeId": "analyser",
+      "sourceOutput": "spectrum",
+      "targetNodeId": "viz",
+      "targetInput": "spectrum"
+    },
+    {
+      "id": "filter-bake",
+      "sourceNodeId": "filter",
+      "sourceOutput": "out",
+      "targetNodeId": "to-pcm",
+      "targetInput": "in"
+    },
+    {
+      "id": "bake-wav",
+      "sourceNodeId": "to-pcm",
+      "sourceOutput": "pcm",
+      "targetNodeId": "encode-wav",
+      "targetInput": "pcm"
+    },
+    {
+      "id": "wav-play",
+      "sourceNodeId": "encode-wav",
+      "sourceOutput": "file",
+      "targetNodeId": "play-wav",
+      "targetInput": "source"
+    },
+    {
+      "id": "wav-download",
+      "sourceNodeId": "encode-wav",
+      "sourceOutput": "file",
+      "targetNodeId": "download",
+      "targetInput": "file"
+    }
+  ]
+}

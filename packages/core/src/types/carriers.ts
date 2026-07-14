@@ -319,6 +319,112 @@ export interface PcmAudioClip {
   diagnostics: MediaDiagnostic[];
 }
 
+/** Descriptor for a Web Audio graph node; the native AudioNode lives in the Live session. */
+export type WebAudioNodeKind =
+  | 'source'
+  | 'stream_source'
+  | 'gain'
+  | 'biquadfilter'
+  | 'analyser'
+  | 'destination'
+  | 'to_pcm';
+
+/** One stage in a serial webaudio processing chain (for Offline bake → pcm_audio). */
+export interface WebAudioChainStep {
+  kind: WebAudioNodeKind;
+  nodeDefinitionId: string;
+  params: Record<string, unknown>;
+}
+
+export interface WebAudioHandle {
+  handleId: string;
+  kind: WebAudioNodeKind;
+  nodeDefinitionId: string;
+  label?: string;
+  params: Record<string, unknown>;
+  /** Upstream stages + this stage, used by webaudio_to_pcm Offline rendering. */
+  chain: WebAudioChainStep[];
+}
+
+/**
+ * Live-capable stream descriptor. Native MediaStream is owned by the Live session,
+ * not stored on the pin (same pattern as webaudio ↔ AudioNode).
+ */
+export type LiveStreamOrigin = 'static' | 'device' | 'remote';
+export type LiveStreamMediaKind = 'audio' | 'video' | 'av';
+
+/** How the ring is filled: one-shot static load vs continuous live push. */
+export type RingFillMode = 'static_once' | 'continuous';
+/** Who drives the clock / data flow. */
+export type RingIoMode = 'producer_push' | 'consumer_pull';
+/** Wall-clock realtime vs explicit rate clock. */
+export type RingClockMode = 'realtime' | 'fixed_rate';
+export type RingUnderrunPolicy = 'silence' | 'wait' | 'loop';
+export type RingOverrunPolicy = 'drop_oldest' | 'block_producer' | 'drop_newest';
+
+/** Common ring-buffer clock / pacing configuration (Live session owns native buffers). */
+export interface RingBufferConfig {
+  fillMode: RingFillMode;
+  ioMode: RingIoMode;
+  clockMode: RingClockMode;
+  /** Clock multiplier (playback rate) relative to 1x. */
+  rate: number;
+  /** Target audio sample rate; 0 = follow source. */
+  targetSampleRate: number;
+  /** Target video frame rate; 0 = follow source. */
+  targetFrameRate: number;
+  /** Nominal ring capacity in seconds. */
+  capacitySeconds: number;
+  underrunPolicy: RingUnderrunPolicy;
+  overrunPolicy: RingOverrunPolicy;
+  /** static_once: rewind when drained. */
+  loop: boolean;
+  /** Audio output gain. */
+  gain: number;
+}
+
+export interface LiveStreamHandle {
+  streamId: string;
+  origin: LiveStreamOrigin;
+  mediaKind: LiveStreamMediaKind;
+  nodeDefinitionId: string;
+  label?: string;
+  params: Record<string, unknown>;
+  hasPcm?: boolean;
+  hasVideo?: boolean;
+  /** Present when produced by ring_buffer_source. */
+  ring?: RingBufferConfig;
+}
+
+/**
+ * Graph-local control bus event (Play/Stop, future conditional pulses).
+ * Live session owns delivery; batch execute only snapshots the last event.
+ */
+export type ControlEventKind = 'start' | 'stop' | 'pulse' | 'arm' | 'disarm';
+
+export interface ControlEvent {
+  kind: ControlEventKind;
+  atMs: number;
+  sourceId: string;
+  payload?: Record<string, unknown>;
+}
+
+/** Descriptor for a control source or gated consumer (native bus lives in Live session). */
+export interface ControlHandle {
+  controlId: string;
+  nodeDefinitionId: string;
+  label?: string;
+  lastEvent?: ControlEvent;
+  params?: Record<string, unknown>;
+}
+
+/** Frequency-domain snapshot from AnalyserNode, used by Live visualization. */
+export interface AudioSpectrum {
+  bins: Uint8Array;
+  sampleRate: number;
+  fftSize: number;
+}
+
 export interface EncodedTrack {
   trackId: string;
   kind: 'video' | 'audio';

@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "name": "Remux Dual Source MP4",
+  "description": "File A → video selection; File B → audio selection; mux a new MP4. Use after capture.mp4 + another media (wav/mp3/mp4).",
+  "nodes": [
+    { "id": "file-video", "type": "file_loader", "position": [60, 80] },
+    { "id": "analyze-video", "type": "auto_analyze", "position": [300, 80] },
+    {
+      "id": "video-track",
+      "type": "track_select",
+      "position": [560, 60],
+      "params": { "kind": "video", "trackIndex": 0 }
+    },
+    {
+      "id": "video-select",
+      "type": "media_select",
+      "position": [820, 60],
+      "params": {
+        "startTimeSeconds": 0,
+        "endTimeSeconds": -1,
+        "frameType": "all",
+        "limit": -1
+      }
+    },
+    { "id": "file-audio", "type": "file_loader", "position": [60, 340] },
+    { "id": "analyze-audio", "type": "auto_analyze", "position": [300, 340] },
+    {
+      "id": "audio-track",
+      "type": "track_select",
+      "position": [560, 340],
+      "params": { "kind": "audio", "trackIndex": 0 }
+    },
+    {
+      "id": "audio-select",
+      "type": "media_select",
+      "position": [820, 340],
+      "params": {
+        "startTimeSeconds": 0,
+        "endTimeSeconds": -1,
+        "limit": -1
+      }
+    },
+    {
+      "id": "mux",
+      "type": "mp4_muxer",
+      "position": [1100, 200],
+      "params": {
+        "fileName": "dual-source.mp4",
+        "alignMode": "trim_to_video"
+      }
+    },
+    { "id": "play", "type": "mp4_player", "position": [1380, 120] },
+    {
+      "id": "download",
+      "type": "file_export",
+      "position": [1380, 300],
+      "params": { "fileName": "dual-source.mp4" }
+    }
+  ],
+  "edges": [
+    {
+      "id": "filev-analyze",
+      "sourceNodeId": "file-video",
+      "sourceOutput": "source",
+      "targetNodeId": "analyze-video",
+      "targetInput": "source"
+    },
+    {
+      "id": "analyzev-track",
+      "sourceNodeId": "analyze-video",
+      "sourceOutput": "asset",
+      "targetNodeId": "video-track",
+      "targetInput": "asset"
+    },
+    {
+      "id": "trackv-select",
+      "sourceNodeId": "video-track",
+      "sourceOutput": "selectedTrack",
+      "targetNodeId": "video-select",
+      "targetInput": "source"
+    },
+    {
+      "id": "selectv-mux",
+      "sourceNodeId": "video-select",
+      "sourceOutput": "selection",
+      "targetNodeId": "mux",
+      "targetInput": "video"
+    },
+    {
+      "id": "filea-analyze",
+      "sourceNodeId": "file-audio",
+      "sourceOutput": "source",
+      "targetNodeId": "analyze-audio",
+      "targetInput": "source"
+    },
+    {
+      "id": "analyzea-track",
+      "sourceNodeId": "analyze-audio",
+      "sourceOutput": "asset",
+      "targetNodeId": "audio-track",
+      "targetInput": "asset"
+    },
+    {
+      "id": "tracka-select",
+      "sourceNodeId": "audio-track",
+      "sourceOutput": "selectedTrack",
+      "targetNodeId": "audio-select",
+      "targetInput": "source"
+    },
+    {
+      "id": "selecta-mux",
+      "sourceNodeId": "audio-select",
+      "sourceOutput": "selection",
+      "targetNodeId": "mux",
+      "targetInput": "audio"
+    },
+    {
+      "id": "mux-play",
+      "sourceNodeId": "mux",
+      "sourceOutput": "file",
+      "targetNodeId": "play",
+      "targetInput": "source"
+    },
+    {
+      "id": "mux-export",
+      "sourceNodeId": "mux",
+      "sourceOutput": "file",
+      "targetNodeId": "download",
+      "targetInput": "file"
+    }
+  ]
+}

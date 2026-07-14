@@ -15,6 +15,7 @@ import {
   type CaptureSessionInfo,
   type CaptureTrackRole,
 } from './selection.js';
+import { CAPTURE_WORKLET_NAME, CAPTURE_WORKLET_SOURCE } from './capture_worklet.js';
 
 export interface MediaDeviceSummary {
   deviceId: string;
@@ -23,7 +24,8 @@ export interface MediaDeviceSummary {
 }
 
 export interface DeviceCaptureOptions {
-  durationSeconds: number;
+  /** Required when recording via captureFromDevices; unused by openCaptureStreams. */
+  durationSeconds?: number;
   enableVideo?: boolean;
   enableMicrophone?: boolean;
   enableSpeaker?: boolean;
@@ -322,35 +324,63 @@ export async function captureAudioTrack(
   const audioContext = new AudioContext();
   try {
     await audioContext.resume();
+    if (typeof audioContext.audioWorklet?.addModule !== 'function') {
+      throw new Error('DeviceCapture: AudioWorklet is required (ScriptProcessorNode is not supported)');
+    }
+
+    const blob = new Blob([CAPTURE_WORKLET_SOURCE], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    try {
+      await audioContext.audioWorklet.addModule(url);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+
     const sourceNode = audioContext.createMediaStreamSource(stream);
     const channels = Math.max(1, Math.min(2, mediaTrack.getSettings().channelCount ?? 1));
     const sampleRate = audioContext.sampleRate;
     const totalSamples = Math.ceil((durationUs / 1_000_000) * sampleRate);
-    const bufferSize = 4096;
-    const processor = audioContext.createScriptProcessor(bufferSize, channels, channels);
     const channelChunks = Array.from({ length: channels }, () => [] as Float32Array[]);
 
+    const worklet = new AudioWorkletNode(audioContext, CAPTURE_WORKLET_NAME, {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [channels],
+      channelCount: channels,
+      channelCountMode: 'explicit',
+    });
+
     const done = new Promise<void>((resolve, reject) => {
-      processor.onaudioprocess = event => {
+      worklet.port.onmessage = event => {
+        const data = event.data;
+        if (!data || data.type !== 'chunk') return;
+        const planes = data.planes as Float32Array[];
         for (let channel = 0; channel < channels; channel++) {
-          channelChunks[channel]!.push(new Float32Array(event.inputBuffer.getChannelData(channel)));
+          const plane = planes[Math.min(channel, planes.length - 1)];
+          if (plane) channelChunks[channel]!.push(plane);
         }
+      };
+      worklet.onprocessorerror = () => {
+        reject(new Error(`DeviceCapture: ${role} AudioWorklet failed`));
       };
       const timer = window.setTimeout(() => resolve(), durationUs / 1_000);
       signal?.addEventListener('abort', () => {
         window.clearTimeout(timer);
         resolve();
       }, { once: true });
-      processor.addEventListener('processorerror', () => {
-        reject(new Error(`DeviceCapture: ${role} audio processor failed`));
-      }, { once: true });
     });
 
-    sourceNode.connect(processor);
-    processor.connect(audioContext.destination);
+    const mute = audioContext.createGain();
+    mute.gain.value = 0;
+    sourceNode.connect(worklet);
+    worklet.connect(mute);
+    mute.connect(audioContext.destination);
     await done;
-    processor.disconnect();
+    worklet.port.postMessage({ type: 'stop' });
+    worklet.port.onmessage = null;
+    worklet.disconnect();
     sourceNode.disconnect();
+    mute.disconnect();
 
     const planes = channelChunks.map(chunks => concatFloat32(chunks, totalSamples));
     const sampleCount = planes[0]?.length ?? 0;

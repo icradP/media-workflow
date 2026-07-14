@@ -18,3 +18,5 @@ export type {
   MediaDeviceSummary,
   OpenCaptureStreamsResult,
 } from './browser.js';
+export { createLiveCameraPump } from './live_camera_pump.js';
+export type { LiveCameraPump } from './live_camera_pump.js';

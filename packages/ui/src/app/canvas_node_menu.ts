@@ -8,6 +8,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   decode: '#54a0ff',
   inspect: '#feca57',
   transform: '#10ac84',
+  realtime: '#00d2d3',
   parser: '#7c5cff',
   demux: '#ff9f43',
   decoder: '#54a0ff',

@@ -21,6 +21,10 @@ import type {
   DecodedVideoFrame,
   DecodedVideoClip,
   PcmAudioClip,
+  WebAudioHandle,
+  AudioSpectrum,
+  LiveStreamHandle,
+  ControlHandle,
   EncodedTrack,
   MediaFile,
   MediaAnalysisResult,
@@ -58,6 +62,10 @@ export type DataPinType =
   | 'decoded_video_frames'
   | 'decoded_video'
   | 'pcm_audio'
+  | 'webaudio'
+  | 'live_stream'
+  | 'control'
+  | 'audio_spectrum'
   | 'encoded_track'
   | 'media_file'
   | 'playback_source'
@@ -99,6 +107,10 @@ export interface PinDataMap {
   decoded_video_frames: DecodedVideoClip;
   decoded_video: DecodedVideoClip;
   pcm_audio: PcmAudioClip;
+  webaudio: WebAudioHandle;
+  live_stream: LiveStreamHandle;
+  control: ControlHandle;
+  audio_spectrum: AudioSpectrum;
   encoded_track: EncodedTrack;
   media_file: MediaFile;
   playback_source: MediaFile | MediaSource;

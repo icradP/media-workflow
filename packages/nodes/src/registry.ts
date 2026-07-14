@@ -23,6 +23,16 @@ import { h264EncoderNode } from './encoder/h264_encoder.js';
 import { audioResampleNode } from './transform/audio_resample.js';
 import { rawYuvExporterNode } from './export/raw_yuv.js';
 import { fileExportNode } from './export/file_export.js';
+import {
+  audioAnalyserNode,
+  audioBiquadFilterNode,
+  audioDestinationNode,
+  audioGainNode,
+  audioVisualizationNode,
+  ringBufferSourceNode,
+  triggerButtonNode,
+  webaudioToPcmNode,
+} from './realtime/index.js';
 
 export const allNodes: NodeDefinition[] = [
   fileLoaderNode,
@@ -49,6 +59,14 @@ export const allNodes: NodeDefinition[] = [
   mp4MuxerNode,
   rawYuvExporterNode,
   fileExportNode,
+  triggerButtonNode,
+  ringBufferSourceNode,
+  audioGainNode,
+  audioBiquadFilterNode,
+  audioAnalyserNode,
+  audioDestinationNode,
+  audioVisualizationNode,
+  webaudioToPcmNode,
 ];
 
 export const nodeRegistry: Map<string, NodeDefinition> = new Map(

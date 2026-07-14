@@ -77,6 +77,7 @@ export type NodeCategory =
   | 'inspect'
   | 'transform'
   | 'export'
+  | 'realtime'
   // Internal/legacy implementation categories kept for non-palette backends.
   | 'parser'
   | 'demux'

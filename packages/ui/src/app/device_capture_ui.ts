@@ -90,5 +90,5 @@ export function deviceCaptureNodeWidth(): number {
 }
 
 export function deviceCaptureNodeHeight(): number {
-  return 220;
+  return 280;
 }

@@ -56,16 +56,28 @@ export const webcodecsVideoDecoderNode: NodeDefinition<
     if (!isWebCodecsAvailable()) {
       throw new Error('WebCodecsVideoDecoder: WebCodecs is not available in this environment');
     }
-    if (request.decodePackets.length > DECODE_LIMITS.maxVideoFrames) {
-      throw new Error(
-        `WebCodecsVideoDecoder: decode packet count ${request.decodePackets.length} exceeds limit ${DECODE_LIMITS.maxVideoFrames}`,
-      );
+
+    let decodePackets = request.decodePackets;
+    let targetSampleIds = request.targetSampleIds;
+    const diagnostics = [...request.diagnostics];
+    if (decodePackets.length > DECODE_LIMITS.maxVideoFrames) {
+      const kept = DECODE_LIMITS.maxVideoFrames;
+      decodePackets = decodePackets.slice(0, kept);
+      const keepIds = new Set(decodePackets.map(packet => packet.sourceSampleId));
+      targetSampleIds = targetSampleIds.filter(id => keepIds.has(id));
+      diagnostics.push({
+        severity: 'warning',
+        code: 'decoder.webcodecs.video_truncated',
+        message:
+          `Decode truncated from ${request.decodePackets.length} to ${kept} packets `
+          + `(DECODE_LIMITS.maxVideoFrames). Lower resolution/fps or shorten the range for longer Live play.`,
+      });
+      ctx.log.warn(diagnostics[diagnostics.length - 1]!.message);
     }
 
-    const diagnostics = [...request.diagnostics];
-    const targetIds = new Set(request.targetSampleIds);
+    const targetIds = new Set(targetSampleIds);
     const ptsToSampleId = new Map(
-      request.decodePackets.map(packet => [packet.ptsUs, packet.sourceSampleId]),
+      decodePackets.map(packet => [packet.ptsUs, packet.sourceSampleId]),
     );
     const pendingFrames: Array<{ frame: VideoFrame; sourceSampleId: string }> = [];
     const decoder = new VideoDecoder({
@@ -99,7 +111,7 @@ export const webcodecsVideoDecoderNode: NodeDefinition<
     const inputFormat = request.decoderConfig.bitstreamFormat;
     const chunkFormat = inputFormat === 'annexb' ? 'annexb' : 'avcc';
 
-    for (const packet of request.decodePackets) {
+    for (const packet of decodePackets) {
       if (ctx.signal.aborted) break;
       const payload = adaptPacketForDecoder(packet.data, packet.bitstreamFormat, chunkFormat);
       const chunk = new EncodedVideoChunk({

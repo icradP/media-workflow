@@ -126,7 +126,7 @@ function inferFrameRate(frames: DecodedVideoFrame[]): number {
   return Math.max(1, Math.round((frames.length * 1_000_000) / durationUs));
 }
 
-function decodedFrameToVideoFrame(frame: DecodedVideoFrame): VideoFrame {
+export function decodedFrameToVideoFrame(frame: DecodedVideoFrame): VideoFrame {
   const [y, u, v] = frame.planes;
   if (!y || !u || !v) {
     throw new Error('H.264 encode: decoded frame is missing I420 planes');

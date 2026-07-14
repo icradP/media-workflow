@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "name": "Live Capture Playback",
+  "description": "Camera + mic → Ring Buffer (continuous) → Video Preview + Gain/Filter/speakers. Live Play monitors A/V in realtime (headphones recommended).",
+  "nodes": [
+    {
+      "id": "capture",
+      "type": "device_capture",
+      "position": [60, 180],
+      "params": {
+        "durationSeconds": 5,
+        "enableVideo": true,
+        "enableMicrophone": true,
+        "enableSpeaker": false,
+        "width": 640,
+        "height": 480,
+        "frameRate": 30,
+        "sampleRate": 48000,
+        "videoDeviceId": "",
+        "audioDeviceId": ""
+      }
+    },
+    {
+      "id": "ring",
+      "type": "ring_buffer_source",
+      "position": [360, 180],
+      "params": {
+        "fillMode": "continuous",
+        "ioMode": "producer_push",
+        "clockMode": "realtime",
+        "rate": 1,
+        "targetSampleRate": 0,
+        "targetFrameRate": 30,
+        "capacitySeconds": 1,
+        "underrunPolicy": "silence",
+        "overrunPolicy": "drop_oldest",
+        "loop": false,
+        "gain": 1
+      }
+    },
+    {
+      "id": "preview",
+      "type": "video_preview",
+      "position": [680, 40],
+      "params": {
+        "frameIndex": 0,
+        "continuous": true
+      }
+    },
+    {
+      "id": "gain",
+      "type": "audio_gain",
+      "position": [680, 260],
+      "params": { "gain": 0.7 }
+    },
+    {
+      "id": "filter",
+      "type": "audio_biquadfilter",
+      "position": [940, 260],
+      "params": {
+        "type": "lowpass",
+        "frequency": 16000,
+        "Q": 1,
+        "detune": 0
+      }
+    },
+    {
+      "id": "destination",
+      "type": "audio_destination",
+      "position": [1220, 160]
+    },
+    {
+      "id": "analyser",
+      "type": "audio_analyser",
+      "position": [1220, 320],
+      "params": {
+        "fftSize": "2048",
+        "minDecibels": -100,
+        "maxDecibels": -10,
+        "smoothingTimeConstant": 0.5
+      }
+    },
+    {
+      "id": "viz",
+      "type": "audio_visualization",
+      "position": [1480, 300],
+      "params": {
+        "continuous": true,
+        "mark": -1
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "capture-ring-audio",
+      "sourceNodeId": "capture",
+      "sourceOutput": "out",
+      "targetNodeId": "ring",
+      "targetInput": "audioIn"
+    },
+    {
+      "id": "capture-ring-live",
+      "sourceNodeId": "capture",
+      "sourceOutput": "stream",
+      "targetNodeId": "ring",
+      "targetInput": "liveIn"
+    },
+    {
+      "id": "ring-preview",
+      "sourceNodeId": "ring",
+      "sourceOutput": "stream",
+      "targetNodeId": "preview",
+      "targetInput": "stream"
+    },
+    {
+      "id": "ring-gain",
+      "sourceNodeId": "ring",
+      "sourceOutput": "out",
+      "targetNodeId": "gain",
+      "targetInput": "in"
+    },
+    {
+      "id": "gain-filter",
+      "sourceNodeId": "gain",
+      "sourceOutput": "out",
+      "targetNodeId": "filter",
+      "targetInput": "in"
+    },
+    {
+      "id": "filter-dest",
+      "sourceNodeId": "filter",
+      "sourceOutput": "out",
+      "targetNodeId": "destination",
+      "targetInput": "in"
+    },
+    {
+      "id": "filter-analyser",
+      "sourceNodeId": "filter",
+      "sourceOutput": "out",
+      "targetNodeId": "analyser",
+      "targetInput": "in"
+    },
+    {
+      "id": "analyser-viz",
+      "sourceNodeId": "analyser",
+      "sourceOutput": "spectrum",
+      "targetNodeId": "viz",
+      "targetInput": "spectrum"
+    }
+  ]
+}

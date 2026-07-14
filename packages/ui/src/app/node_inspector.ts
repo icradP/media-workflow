@@ -26,6 +26,7 @@ const PARAM_LABELS: Record<string, Record<string, string>> = {
     endTimeSeconds: '结束时间 (秒)',
     frameType: '帧类型',
     limit: '数量上限',
+    eagerDecode: '立即全解 (inspect)',
     outputFormat: '输出像素格式',
   },
   audio_decode: {
@@ -60,6 +61,45 @@ const PARAM_LABELS: Record<string, Record<string, string>> = {
   aac_encoder: {
     bitrate: '码率 (bps)',
   },
+  audio_gain: {
+    gain: '增益',
+  },
+  audio_biquadfilter: {
+    type: '滤波器类型',
+    frequency: '截止频率 (Hz)',
+    Q: 'Q',
+    detune: 'Detune',
+  },
+  audio_analyser: {
+    fftSize: 'FFT 大小',
+    minDecibels: '最小 dB',
+    maxDecibels: '最大 dB',
+    smoothingTimeConstant: '平滑',
+  },
+  audio_visualization: {
+    continuous: '连续绘制',
+    mark: '标记频率 (Hz)',
+  },
+  video_preview: {
+    frameIndex: '帧索引',
+    continuous: 'Live 连续绘制',
+  },
+  webaudio_to_pcm: {
+    maxDurationSeconds: '最长烘培时长 (秒)',
+  },
+  ring_buffer_source: {
+    fillMode: '填充模式',
+    ioMode: '推/拉模式',
+    clockMode: '时钟模式',
+    rate: '速率',
+    targetSampleRate: '目标采样率 (0=跟源)',
+    targetFrameRate: '固定帧率 (fps，fixed_rate 用)',
+    capacitySeconds: '解码/环窗口 (秒)',
+    underrunPolicy: '欠载策略',
+    overrunPolicy: '过载策略',
+    loop: '循环',
+    gain: '增益',
+  },
 };
 
 const TIMELINE_NODE_IDS = new Set(['media_select', 'video_decode', 'audio_decode', 'aac_transcode']);
@@ -78,6 +118,11 @@ const ALIGN_MODE_LABELS: Record<string, string> = {
   none: '不裁剪（各轨保持原时长）',
   trim_to_video: '以视频时长裁剪音频',
   trim_to_audio: '以音频时长裁剪视频',
+};
+
+const CLOCK_MODE_LABELS: Record<string, string> = {
+  realtime: '按时间戳 (PTS)',
+  fixed_rate: '固定帧率',
 };
 
 interface InspectorNodeLike {
@@ -335,5 +380,6 @@ function enumOptionLabel(
   value: string,
 ): string | undefined {
   if (paramKey === 'alignMode') return ALIGN_MODE_LABELS[value];
+  if (paramKey === 'clockMode') return CLOCK_MODE_LABELS[value];
   return FRAME_TYPE_LABELS[value];
 }

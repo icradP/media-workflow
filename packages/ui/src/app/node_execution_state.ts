@@ -45,7 +45,8 @@ export function startExecutionAnimation(canvas: DirtyCanvas): void {
   animationCanvas = canvas;
   const tick = (time: number) => {
     animationPhase = time;
-    animationCanvas?.setDirty(true, false);
+    // Links (flow dots) live on the background canvas — must dirt both layers.
+    animationCanvas?.setDirty(true, true);
     animationFrameId = requestAnimationFrame(tick);
   };
   animationFrameId = requestAnimationFrame(tick);

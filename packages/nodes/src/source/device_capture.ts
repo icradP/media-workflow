@@ -1,5 +1,51 @@
-import type { NodeDefinition } from '@media-workflow/core';
+import type { LiveStreamHandle, NodeDefinition } from '@media-workflow/core';
 import { captureFromDevices, isBrowserCaptureAvailable } from '@media-workflow/codec';
+import { createWebAudioHandle } from '../realtime/handles.js';
+
+function buildLiveOutputs(params: Record<string, unknown>): {
+  stream: LiveStreamHandle;
+  out: ReturnType<typeof createWebAudioHandle>;
+} {
+  const enableMicrophone = params.enableMicrophone !== false;
+  const enableSpeaker = Boolean(params.enableSpeaker);
+  const enableVideo = params.enableVideo !== false;
+  const label = [
+    enableVideo ? 'camera' : null,
+    enableMicrophone ? 'mic' : null,
+    enableSpeaker ? 'speaker' : null,
+  ].filter(Boolean).join('+') || 'device';
+
+  const stream: LiveStreamHandle = {
+    streamId: `device:${Date.now()}`,
+    origin: 'device',
+    mediaKind: enableVideo && (enableMicrophone || enableSpeaker)
+      ? 'av'
+      : enableVideo
+        ? 'video'
+        : 'audio',
+    nodeDefinitionId: 'device_capture',
+    label,
+    hasPcm: enableMicrophone || enableSpeaker,
+    hasVideo: enableVideo,
+    params: {
+      enableMicrophone,
+      enableSpeaker,
+      enableVideo,
+      audioDeviceId: String(params.audioDeviceId ?? '').trim(),
+      videoDeviceId: String(params.videoDeviceId ?? '').trim(),
+    },
+  };
+
+  const out = createWebAudioHandle('stream_source', 'device_capture', {
+    enableMicrophone,
+    enableSpeaker,
+    enableVideo,
+    audioDeviceId: stream.params.audioDeviceId,
+    videoDeviceId: stream.params.videoDeviceId,
+  });
+
+  return { stream, out };
+}
 
 export const deviceCaptureNode: NodeDefinition<
   Record<string, never>,
@@ -10,13 +56,17 @@ export const deviceCaptureNode: NodeDefinition<
     micSelection: 'media_selection';
     speaker: 'pcm_audio';
     speakerSelection: 'media_selection';
+    stream: 'live_stream';
+    out: 'webaudio';
   }
 > = {
   id: 'device_capture',
   category: 'source',
   displayName: 'Device Capture',
   description:
-    'Capture camera, microphone, and system/tab speaker audio. Audio can be resampled via sampleRate (0 = device native).',
+    'Device source for both modes: 「运行」records durationSeconds → PCM/video; '
+    + 'Live Play keeps MediaStream open (camera → Video Preview via live_stream; '
+    + 'mic → webaudio → Gain/Filter/Destination). Headphones recommended.',
   inputs: {},
   outputs: {
     video: { type: 'decoded_video', label: 'Camera Video' },
@@ -25,6 +75,8 @@ export const deviceCaptureNode: NodeDefinition<
     micSelection: { type: 'media_selection', label: 'Mic Selection' },
     speaker: { type: 'pcm_audio', label: 'Speaker PCM' },
     speakerSelection: { type: 'media_selection', label: 'Speaker Selection' },
+    stream: { type: 'live_stream', label: 'Live Stream' },
+    out: { type: 'webaudio', label: 'Web Audio (live)' },
   },
   params: {
     durationSeconds: {
@@ -51,11 +103,13 @@ export const deviceCaptureNode: NodeDefinition<
       step: 1_000,
     },
   },
+  cachePolicy: 'never',
   async execute(ctx, { params }) {
     if (!isBrowserCaptureAvailable()) {
       throw new Error('DeviceCapture: browser MediaDevices API is required');
     }
 
+    const live = buildLiveOutputs(params);
     const result = await captureFromDevices({
       durationSeconds: Number(params.durationSeconds) || 5,
       enableVideo: Boolean(params.enableVideo ?? true),
@@ -70,7 +124,10 @@ export const deviceCaptureNode: NodeDefinition<
       signal: ctx.signal,
     });
 
-    const outputs: Partial<Record<string, unknown>> = {};
+    const outputs: Record<string, unknown> = {
+      stream: live.stream,
+      out: live.out,
+    };
     if (result.video) outputs.video = result.video;
     if (result.videoSelection) outputs.videoSelection = result.videoSelection;
     if (result.microphone) outputs.microphone = result.microphone;
@@ -78,14 +135,15 @@ export const deviceCaptureNode: NodeDefinition<
     if (result.speaker) outputs.speaker = result.speaker;
     if (result.speakerSelection) outputs.speakerSelection = result.speakerSelection;
 
-    if (Object.keys(outputs).length === 0) {
+    const batchKeys = Object.keys(outputs).filter(key => key !== 'stream' && key !== 'out');
+    if (batchKeys.length === 0) {
       throw new Error('DeviceCapture: no media was captured with the current settings');
     }
 
     ctx.log.info(
       `DeviceCapture: ${result.video?.frames.length ?? 0} video frame(s), `
       + `${result.microphone ? 'mic' : ''}${result.microphone && result.speaker ? '+' : ''}`
-      + `${result.speaker ? 'speaker' : ''} audio`,
+      + `${result.speaker ? 'speaker' : ''} audio · live webaudio ready`,
     );
 
     return outputs as never;

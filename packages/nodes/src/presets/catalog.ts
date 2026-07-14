@@ -7,7 +7,13 @@ import decodeFirstKeyframePreset from '../../presets/decode-first-keyframe.workf
 import decodeFirstKeyframeDisplayPreset from '../../presets/decode-first-keyframe-display.workflow.json';
 import decodeAudioRangePreset from '../../presets/decode-audio-range.workflow.json';
 import remuxMp4SelectionsPreset from '../../presets/remux-mp4-selections.workflow.json';
+import remuxDualSourceMp4Preset from '../../presets/remux-dual-source-mp4.workflow.json';
 import captureRecordMp4Preset from '../../presets/capture-record-mp4.workflow.json';
+import realtimeAudioPlaybackPreset from '../../presets/realtime-audio-playback.workflow.json';
+import realtimeVideoPlaybackPreset from '../../presets/realtime-video-playback.workflow.json';
+import staticToLiveStreamPreset from '../../presets/ring-buffer-live.workflow.json';
+import liveCapturePlaybackPreset from '../../presets/live-capture-playback.workflow.json';
+import liveCaptureRecordMp4Preset from '../../presets/live-capture-record-mp4.workflow.json';
 
 export interface WorkflowPresetCatalogEntry {
   id: string;
@@ -66,6 +72,41 @@ export const WORKFLOW_PRESET_CATALOG: WorkflowPresetCatalogEntry[] = [
     preset: decodeAudioRangePreset as WorkflowPreset,
   },
   {
+    id: 'realtime-audio-playback',
+    name: '实时音频处理',
+    description:
+      '解码 PCM → Web Audio 滤波（Live 监听）→ 烘培回 PCM → WAV。运行导出；Live 试听调参。',
+    preset: realtimeAudioPlaybackPreset as WorkflowPreset,
+  },
+  {
+    id: 'realtime-video-playback',
+    name: '实时视频播放',
+    description:
+      '选段 → EncodedTrack → Ring（stream WebCodecs · 短解码窗口）→ Video Preview。运行只物化编码包；Live Play 按帧率绘制。',
+    preset: realtimeVideoPlaybackPreset as WorkflowPreset,
+  },
+  {
+    id: 'static-to-live-stream',
+    name: 'Ring Buffer 直播源',
+    description:
+      '解码 PCM → Ring Buffer（static_once）→ 滤波 → Destination。运行填环；Live Play 按速率消费。',
+    preset: staticToLiveStreamPreset as WorkflowPreset,
+  },
+  {
+    id: 'live-capture-playback',
+    name: '实时采集播放',
+    description:
+      '摄像头+麦克风 → Ring Buffer（continuous）→ Video Preview + Gain/滤波/扬声器。Live Play 实时 A/V（建议耳机）。',
+    preset: liveCapturePlaybackPreset as WorkflowPreset,
+  },
+  {
+    id: 'live-capture-record-mp4',
+    name: '实时采集录制 MP4',
+    description:
+      'Live Play 监听；Trigger → Muxer recordStart/Stop 门控录制 → Player/Export。',
+    preset: liveCaptureRecordMp4Preset as WorkflowPreset,
+  },
+  {
     id: 'capture-record-mp4',
     name: '摄像头采集封装',
     description: '采集摄像头与麦克风，编码 H.264/AAC，封装 MP4 并播放、导出。',
@@ -76,6 +117,13 @@ export const WORKFLOW_PRESET_CATALOG: WorkflowPresetCatalogEntry[] = [
     name: 'MP4 选段封装',
     description: '分别选择视频/音频范围，封装 MP4 并播放、导出。',
     preset: remuxMp4SelectionsPreset as WorkflowPreset,
+  },
+  {
+    id: 'remux-dual-source-mp4',
+    name: '双源封装 MP4',
+    description:
+      '媒体 A 抽视频轨 + 媒体 B 抽音频轨 → Mux 新 MP4。适合采集 MP4 + 另一音频源合成。',
+    preset: remuxDualSourceMp4Preset as WorkflowPreset,
   },
 ];
 

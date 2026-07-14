@@ -129,9 +129,14 @@ function collectTransferables(value: unknown, transferables: ArrayBuffer[]): voi
 
 export const DEFAULT_VIDEO_OUTPUT_FORMAT: DecodedVideoPixelFormat = 'I420';
 
+/**
+ * Soft caps for browser eager-decode memory.
+ * Prefer EncodedTrack → Ring stream-decode for long clips (no full I420 materialization).
+ * 7200 ≈ 4min @ 30fps (or ~2min @ 60fps). Beyond this, eager requests truncate with a warning.
+ */
 export const DECODE_LIMITS = {
-  maxVideoFrames: 300,
-  maxVideoPixels: 1920 * 1080 * 300,
+  maxVideoFrames: 7_200,
+  maxVideoPixels: 1920 * 1080 * 7_200,
   /** Browser-side guard against excessive PCM allocation (~110 MB at 48 kHz stereo). */
   maxAudioDurationUs: 5 * 60 * 1_000_000,
 } as const;

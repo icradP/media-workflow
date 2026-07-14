@@ -1,6 +1,16 @@
 export { parseIsoBmffForAnalysis } from './analysis.js';
-export { remuxMediaAssetToMp4, remuxMediaSelectionsToMp4 } from './mux.js';
-export type { RemuxMp4Options, RemuxMp4Result, RemuxMp4SelectionOptions, MuxAlignMode } from './mux.js';
+export {
+  remuxMediaAssetToMp4,
+  remuxMediaSelectionsToMp4,
+  muxEncodedTracksToMp4,
+} from './mux.js';
+export type {
+  RemuxMp4Options,
+  RemuxMp4Result,
+  RemuxMp4SelectionOptions,
+  MuxAlignMode,
+  EncodedMuxTrackInput,
+} from './mux.js';
 export {
   describeMuxSupportedFormats,
   formatMuxAudioError,

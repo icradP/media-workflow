@@ -13,6 +13,7 @@ export interface FrameSelectorNode extends ExecutionHighlightNode {
   frameSelectorPreview?: FrameSelectorPreview | null;
   frameSelectorDrag?: 'start' | 'end' | null;
   size: [number, number];
+  widgets?: Array<{ name: string; value: unknown }>;
   onMouseDown?: (
     event: MouseEvent,
     localPos: [number, number],
@@ -226,6 +227,13 @@ function updateTimelineFromPointer(
     const lower = start;
     if (ratio >= 0.985) {
       node.properties.endTimeSeconds = -1;
+      // Full range: do not leave a leftover frame-count cap from presets/previous runs.
+      if (node.properties.limit !== undefined) {
+        node.properties.limit = -1;
+        const limitWidget = node.widgets?.find(widget =>
+          widget.name === 'limit' || widget.name === 'limit');
+        if (limitWidget) limitWidget.value = -1;
+      }
     } else {
       node.properties.endTimeSeconds = Math.max(time, lower);
     }
