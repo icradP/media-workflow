@@ -8,3 +8,4 @@ tests/fixtures/*.flv
 tests/fixtures/*.ts
 tests/fixtures/*.wav
 tests/fixtures/*.onnx
+.ref/litegraph.js
